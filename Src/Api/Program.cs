@@ -32,9 +32,9 @@ builder.Services.AddDbContext<SampleDbContext>(options =>
     options.UseInMemoryDatabase("SampleDb"));
 
 // Register repositories
-builder.Services.AddScoped<IProductRepository, ProductRepository>();
-builder.Services.AddScoped<IOrderRepository, OrderRepository>();
-builder.Services.AddScoped<IOrderDetailRepository, OrderDetailRepository>();
+builder.Services.AddScoped<ISampleProductRepository, SampleProductRepository>();
+builder.Services.AddScoped<ISampleOrderRepository, SampleOrderRepository>();
+builder.Services.AddScoped<ISampleOrderDetailRepository, SampleOrderDetailRepository>();
 
 // JWT Configuration
 var jwtKey = "your-super-secret-key-with-at-least-32-characters";

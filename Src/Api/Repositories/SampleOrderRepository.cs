@@ -1,13 +1,17 @@
-using Api.Data;
 using Api.Infrastructure.Base;
 using Api.Models;
-using Microsoft.EntityFrameworkCore;
 
 namespace Api.Repositories;
 
-public class OrderRepository : GenericRepository<SampleOrder, int>, IOrderRepository
+public interface ISampleOrderRepository : IGenericRepository<SampleOrder, int>
 {
-    public OrderRepository(SampleDbContext context) : base(context)
+    Task<IEnumerable<SampleOrder>> GetOrdersByCustomerAsync(string customerName);
+    Task<decimal> GetTotalOrderValueAsync(int orderId);
+}
+
+public class SampleOrderRepository : GenericRepository<SampleOrder, int>, ISampleOrderRepository
+{
+    public SampleOrderRepository(SampleDbContext context) : base(context)
     {
     }
 

@@ -3,7 +3,7 @@ using System.Text.Json;
 using Api.Models;
 using Api.Services;
 
-namespace Api.Controllers;
+namespace Api.Controllers.System;
 
 [ApiController]
 [Route("[controller]")]

@@ -1,17 +1,12 @@
-using Microsoft.AspNetCore.Mvc;
-using Api.Infrastructure.Base;
-using Api.Models;
-using Api.Repositories;
-
 namespace Api.Controllers.Entity;
 
 [ApiController]
 [Route("[controller]")]
 public class SampleOrderDetailController : GenericController<SampleOrderDetail, int>
 {
-    private readonly IOrderDetailRepository _orderDetailRepository;
+    private readonly ISampleOrderDetailRepository _orderDetailRepository;
 
-    public SampleOrderDetailController(IOrderDetailRepository repository) : base(repository)
+    public SampleOrderDetailController(ISampleOrderDetailRepository repository) : base(repository)
     {
         _orderDetailRepository = repository;
     }
@@ -32,6 +27,6 @@ public class SampleOrderDetailController : GenericController<SampleOrderDetail, 
 
     protected override int GetEntityId(SampleOrderDetail entity)
     {
-        return entity.OrderDetailId;
+        return entity.OrderId;
     }
 }

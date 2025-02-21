@@ -1,17 +1,12 @@
-using Microsoft.AspNetCore.Mvc;
-using Api.Infrastructure.Base;
-using Api.Models;
-using Api.Repositories;
-
 namespace Api.Controllers.Entity;
 
 [ApiController]
 [Route("[controller]")]
 public class SampleProductController : GenericController<SampleProduct, int>
 {
-    private readonly IProductRepository _productRepository;
+    private readonly ISampleProductRepository _productRepository;
 
-    public SampleProductController(IProductRepository repository) : base(repository)
+    public SampleProductController(ISampleProductRepository repository) : base(repository)
     {
         _productRepository = repository;
     }
@@ -22,3 +17,4 @@ public class SampleProductController : GenericController<SampleProduct, int>
         var products = await _productRepository.GetProductsByPriceRangeAsync(minPrice, maxPrice);
         return Ok(products);
     }
+}

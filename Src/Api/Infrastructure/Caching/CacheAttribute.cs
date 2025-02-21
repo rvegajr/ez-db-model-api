@@ -1,9 +1,3 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.DependencyInjection;
-using System.Text.Json;
-
 namespace Api.Infrastructure.Caching;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]

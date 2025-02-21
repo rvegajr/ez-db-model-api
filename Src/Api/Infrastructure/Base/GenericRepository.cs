@@ -1,8 +1,18 @@
-using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
-using Api.Data;
 
 namespace Api.Infrastructure.Base;
+
+public interface IGenericRepository<TEntity, TKey> where TEntity : class
+{
+    IQueryable<TEntity> GetAsQueryable();
+    Task<TEntity?> GetByIdAsync(TKey id);
+    Task<TEntity> CreateAsync(TEntity entity);
+    Task<TEntity?> UpdateAsync(TEntity entity);
+    Task<TEntity?> DeleteAsync(TKey id);
+    Task<bool> ExistsAsync(TKey id);
+    Task<IEnumerable<TEntity>> GetAllAsync();
+    Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate);
+}
 
 public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey> where TEntity : class
 {
@@ -19,7 +29,20 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
 
     public virtual async Task<TEntity?> GetByIdAsync(TKey id)
     {
-        return await _dbSet.FindAsync(id);
+        if (typeof(TEntity) == typeof(SampleOrderDetail))
+        {
+            // For SampleOrderDetail, we need both OrderId and ProductId
+            return await _dbSet.FirstOrDefaultAsync(e => EF.Property<int>(e, "OrderId").Equals(id));
+        }
+
+        var propertyName = typeof(TEntity).Name switch
+        {
+            "SampleProduct" => "ProductId",
+            "SampleOrder" => "OrderId",
+            _ => "Id"
+        };
+
+        return await _dbSet.FirstOrDefaultAsync(e => EF.Property<TKey>(e, propertyName).Equals(id));
     }
 
     public virtual async Task<TEntity> CreateAsync(TEntity entity)
@@ -31,9 +54,16 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
 
     public virtual async Task<TEntity?> UpdateAsync(TEntity entity)
     {
-        _context.Entry(entity).State = EntityState.Modified;
+        var idProperty = typeof(TEntity).GetProperty(typeof(TEntity).Name == "SampleProduct" ? "ProductId" : "OrderId");
+        if (idProperty == null) return null;
+
+        var id = (TKey)idProperty.GetValue(entity);
+        var existingEntity = await GetByIdAsync(id);
+        if (existingEntity == null) return null;
+
+        _context.Entry(existingEntity).CurrentValues.SetValues(entity);
         await _context.SaveChangesAsync();
-        return entity;
+        return existingEntity;
     }
 
     public virtual async Task<TEntity?> DeleteAsync(TKey id)
@@ -53,7 +83,8 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
 
     public virtual async Task<IEnumerable<TEntity>> GetAllAsync()
     {
-        return await _dbSet.ToListAsync();
+        var entities = await _dbSet.ToListAsync();
+        return entities ?? Enumerable.Empty<TEntity>();
     }
 
     public virtual async Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate)

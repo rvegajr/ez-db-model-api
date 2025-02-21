@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Mvc;
-using Api.Infrastructure.Caching;
-
 namespace Api.Infrastructure.Base;
 
 [ApiController]
@@ -19,6 +16,8 @@ public abstract class GenericController<TEntity, TKey> : ControllerBase
     public virtual async Task<ActionResult<IEnumerable<TEntity>>> GetAll()
     {
         var entities = await _repository.GetAllAsync();
+        if (entities == null || !entities.Any())
+            return NotFound();
         return Ok(entities);
     }
 
@@ -27,7 +26,8 @@ public abstract class GenericController<TEntity, TKey> : ControllerBase
     public virtual async Task<ActionResult<TEntity>> GetById(TKey id)
     {
         var entity = await _repository.GetByIdAsync(id);
-        if (entity == null) return NotFound();
+        if (entity == null)
+            return NotFound();
         return Ok(entity);
     }
 
@@ -39,31 +39,39 @@ public abstract class GenericController<TEntity, TKey> : ControllerBase
     }
 
     [HttpPut("{id}")]
-    public virtual async Task<ActionResult<TEntity>> Update(TKey id, [FromBody] TEntity entity)
+    public virtual async Task<IActionResult> Update(TKey id, [FromBody] TEntity entity)
     {
         if (!EqualityComparer<TKey>.Default.Equals(id, GetEntityId(entity)))
             return BadRequest();
 
         var result = await _repository.UpdateAsync(entity);
         if (result == null) return NotFound();
-        return Ok(result);
+        return NoContent();
     }
 
     [HttpDelete("{id}")]
-    public virtual async Task<ActionResult<TEntity>> Delete(TKey id)
+    public virtual async Task<IActionResult> Delete(TKey id)
     {
         var result = await _repository.DeleteAsync(id);
         if (result == null) return NotFound();
-        return Ok(result);
+        return NoContent();
     }
 
     protected virtual TKey GetEntityId(TEntity entity)
     {
-        var property = typeof(TEntity).GetProperty("Id")
-            ?? throw new InvalidOperationException($"Entity {typeof(TEntity).Name} does not have an Id property.");
+        var propertyName = typeof(TEntity).Name switch
+        {
+            "SampleProduct" => "ProductId",
+            "SampleOrder" => "OrderId",
+            "SampleOrderDetail" => "OrderId",
+            _ => "Id"
+        };
+
+        var property = typeof(TEntity).GetProperty(propertyName)
+            ?? throw new InvalidOperationException($"Entity {typeof(TEntity).Name} does not have a {propertyName} property.");
         
         var value = property.GetValue(entity)
-            ?? throw new InvalidOperationException($"Id property of {typeof(TEntity).Name} is null.");
+            ?? throw new InvalidOperationException($"{propertyName} property of {typeof(TEntity).Name} is null.");
             
         return (TKey)value;
     }

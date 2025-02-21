@@ -1,7 +1,12 @@
-using System.ComponentModel.DataAnnotations;
-using Api.Interfaces;
-
 namespace Api.Models;
+
+public interface ISampleOrder
+{
+    int OrderId { get; set; }
+    DateTime OrderDate { get; set; }
+    string CustomerName { get; set; }
+    decimal TotalAmount { get; set; }
+}
 
 public class SampleOrder : ISampleOrder
 {

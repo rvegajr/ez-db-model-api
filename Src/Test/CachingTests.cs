@@ -1,34 +1,18 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.DependencyInjection;
-using Api.Controllers;
-using Api.Data;
-using Api.Models;
-using Api.Infrastructure.Caching;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.Abstractions;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Routing;
-using Xunit;
+using Xunit.Abstractions;
 
 namespace Test;
 
-public class CachingTests
+public class CachingTests : TestBase
 {
-    private readonly SampleDbContext _context;
+    private readonly ITestOutputHelper _output;
     private readonly SampleProductController _controller;
     private readonly IMemoryCache _cache;
     private readonly HttpContext _httpContext;
 
-    public CachingTests()
+    public CachingTests(ITestOutputHelper output)
     {
-        // Set up database
-        var options = new DbContextOptionsBuilder<SampleDbContext>()
-            .UseInMemoryDatabase(databaseName: "TestDb_" + Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new SampleDbContext(options);
+        _output = output;
+        TestOutputHelper.Initialize(output);
 
         // Set up cache
         var services = new ServiceCollection();
@@ -47,7 +31,8 @@ public class CachingTests
         };
 
         // Set up controller
-        _controller = new SampleProductController(_context);
+        var repository = new SampleProductRepository(_context);
+        _controller = new SampleProductController(repository);
         _controller.ControllerContext = new ControllerContext
         {
             HttpContext = _httpContext
@@ -56,7 +41,7 @@ public class CachingTests
         // Seed test data
         var product = new SampleProduct
         {
-            Id = 1,
+            ProductId = 1,
             Name = "Test Product",
             Price = 19.99m,
             Description = "Test Description"
@@ -68,6 +53,8 @@ public class CachingTests
     [Fact]
     public async Task GetProducts_CachesResponse()
     {
+        _output.WriteLine("\nTesting: Caching of Get All Products");
+        _output.WriteLine("Checking if the response is cached when getting all products");
         // Arrange
         var cacheAttribute = new CacheAttribute();
         _httpContext.Request.Path = "/SampleProduct";
@@ -76,8 +63,9 @@ public class CachingTests
         var executedContext = new ActionExecutedContext(actionContext, new List<IFilterMetadata>(), _controller);
 
         // Act 1 - First request
-        var actionResult = await _controller.GetProducts();
-        executedContext.Result = new OkObjectResult(actionResult.Value);
+        var actionResult = await _controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        executedContext.Result = okResult;
         
         await cacheAttribute.OnActionExecutionAsync(executingContext, async () => executedContext);
 
@@ -97,6 +85,8 @@ public class CachingTests
     [Fact]
     public async Task GetProduct_CachesResponse()
     {
+        _output.WriteLine("\nTesting: Caching of Get Single Product");
+        _output.WriteLine("Checking if the response is cached when getting a single product");
         // Arrange
         var cacheAttribute = new CacheAttribute();
         _httpContext.Request.Path = "/SampleProduct/1";
@@ -106,8 +96,9 @@ public class CachingTests
         var executedContext = new ActionExecutedContext(actionContext, new List<IFilterMetadata>(), _controller);
 
         // Act 1 - First request
-        var actionResult = await _controller.GetProduct(1);
-        executedContext.Result = new OkObjectResult(actionResult.Value);
+        var actionResult = await _controller.GetById(1);
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        executedContext.Result = okResult;
         
         await cacheAttribute.OnActionExecutionAsync(executingContext, async () => executedContext);
 

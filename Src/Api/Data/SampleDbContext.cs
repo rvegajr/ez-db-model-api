@@ -1,6 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using Api.Models;
-
 namespace Api.Data;
 
 public class SampleDbContext : DbContext
@@ -39,14 +36,14 @@ public class SampleDbContext : DbContext
         modelBuilder.Entity<SampleProduct>().HasData(
             new SampleProduct
             {
-                Id = 1,
+                ProductId = 1,
                 Name = "Sample Product 1",
                 Price = 19.99M,
                 Description = "This is a sample product"
             },
             new SampleProduct
             {
-                Id = 2,
+                ProductId = 2,
                 Name = "Sample Product 2",
                 Price = 29.99M,
                 Description = "This is another sample product"

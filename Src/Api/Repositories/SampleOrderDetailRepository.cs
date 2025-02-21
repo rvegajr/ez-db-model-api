@@ -1,13 +1,17 @@
-using Api.Data;
 using Api.Infrastructure.Base;
 using Api.Models;
-using Microsoft.EntityFrameworkCore;
 
 namespace Api.Repositories;
 
-public class OrderDetailRepository : GenericRepository<SampleOrderDetail, int>, IOrderDetailRepository
+public interface ISampleOrderDetailRepository : IGenericRepository<SampleOrderDetail, int>
 {
-    public OrderDetailRepository(SampleDbContext context) : base(context)
+    Task<IEnumerable<SampleOrderDetail>> GetOrderDetailsByOrderAsync(int orderId);
+    Task<decimal> GetOrderDetailTotalAsync(int orderDetailId);
+}
+
+public class SampleOrderDetailRepository : GenericRepository<SampleOrderDetail, int>, ISampleOrderDetailRepository
+{
+    public SampleOrderDetailRepository(SampleDbContext context) : base(context)
     {
     }
 
@@ -19,11 +23,11 @@ public class OrderDetailRepository : GenericRepository<SampleOrderDetail, int>, 
             .ToListAsync();
     }
 
-    public async Task<decimal> GetOrderDetailTotalAsync(int orderDetailId)
+    public async Task<decimal> GetOrderDetailTotalAsync(int orderId)
     {
         var orderDetail = await _dbSet
             .Include(od => od.Product)
-            .FirstOrDefaultAsync(od => od.OrderDetailId == orderDetailId);
+            .FirstOrDefaultAsync(od => od.OrderId == orderId);
 
         return orderDetail?.Quantity * orderDetail?.UnitPrice ?? 0;
     }
@@ -32,6 +36,6 @@ public class OrderDetailRepository : GenericRepository<SampleOrderDetail, int>, 
     {
         return await _dbSet
             .Include(od => od.Product)
-            .FirstOrDefaultAsync(od => od.OrderDetailId == id);
+            .FirstOrDefaultAsync(od => od.OrderId == id);
     }
 }

@@ -1,30 +1,24 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Api.Controllers;
-using Api.Data;
-using Api.Models;
-using Xunit;
+using Xunit.Abstractions;
 
 namespace Test;
 
-public class SampleOrderControllerTests
+public class SampleOrderControllerTests : TestBase
 {
-    private readonly SampleDbContext _context;
+    private readonly ITestOutputHelper _output;
+    private readonly ISampleOrderRepository _repository;
     private readonly SampleOrderController _controller;
 
-    public SampleOrderControllerTests()
+    public SampleOrderControllerTests(ITestOutputHelper output)
     {
-        var options = new DbContextOptionsBuilder<SampleDbContext>()
-            .UseInMemoryDatabase(databaseName: "TestDb_" + Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new SampleDbContext(options);
-        _controller = new SampleOrderController(_context);
+        _output = output;
+        TestOutputHelper.Initialize(output);
+        _repository = new SampleOrderRepository(_context);
+        _controller = new SampleOrderController(_repository);
 
         // Seed test data
         var product = new SampleProduct
         {
-            Id = 1,
+            ProductId = 1,
             Name = "Test Product",
             Price = 19.99m,
             Description = "Test Description"
@@ -53,35 +47,43 @@ public class SampleOrderControllerTests
     }
 
     [Fact]
-    public async Task GetOrders_ReturnsAllOrders()
+    public async Task GetAll_ReturnsAllOrders()
     {
+        _output.WriteLine("\nTesting: Get All Orders");
+        _output.WriteLine("Checking if we can retrieve all orders from the database");
         // Act
-        var result = await _controller.GetOrders();
+        var result = await _controller.GetAll();
 
         // Assert
         var actionResult = Assert.IsType<ActionResult<IEnumerable<SampleOrder>>>(result);
-        var orders = Assert.IsAssignableFrom<IEnumerable<SampleOrder>>(actionResult.Value);
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        var orders = Assert.IsAssignableFrom<IEnumerable<SampleOrder>>(okResult.Value);
         Assert.Single(orders);
     }
 
     [Fact]
-    public async Task GetOrder_ReturnsOrder_WhenOrderExists()
+    public async Task GetById_ReturnsOrder_WhenOrderExists()
     {
+        _output.WriteLine("\nTesting: Get Order By ID");
+        _output.WriteLine("Checking if we can retrieve a specific order using its ID");
         // Act
-        var result = await _controller.GetOrder(1);
+        var result = await _controller.GetById(1);
 
         // Assert
         var actionResult = Assert.IsType<ActionResult<SampleOrder>>(result);
-        var order = Assert.IsType<SampleOrder>(actionResult.Value);
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        var order = Assert.IsType<SampleOrder>(okResult.Value);
         Assert.Equal(1, order.OrderId);
         Assert.Equal("Test Customer", order.CustomerName);
     }
 
     [Fact]
-    public async Task GetOrder_ReturnsNotFound_WhenOrderDoesNotExist()
+    public async Task GetById_ReturnsNotFound_WhenOrderDoesNotExist()
     {
+        _output.WriteLine("\nTesting: Get Non-existent Order");
+        _output.WriteLine("Checking if we get NotFound when requesting an order that doesn't exist");
         // Act
-        var result = await _controller.GetOrder(999);
+        var result = await _controller.GetById(999);
 
         // Assert
         var actionResult = Assert.IsType<ActionResult<SampleOrder>>(result);
@@ -89,8 +91,10 @@ public class SampleOrderControllerTests
     }
 
     [Fact]
-    public async Task CreateOrder_CreatesOrder_WhenModelIsValid()
+    public async Task Create_CreatesOrder_WhenModelIsValid()
     {
+        _output.WriteLine("\nTesting: Create New Order");
+        _output.WriteLine("Checking if we can create a new order with valid data");
         // Arrange
         var newOrder = new SampleOrder
         {
@@ -108,7 +112,7 @@ public class SampleOrderControllerTests
         };
 
         // Act
-        var result = await _controller.CreateOrder(newOrder);
+        var result = await _controller.Create(newOrder);
 
         // Assert
         var actionResult = Assert.IsType<ActionResult<SampleOrder>>(result);
@@ -118,7 +122,7 @@ public class SampleOrderControllerTests
     }
 
     [Fact]
-    public async Task UpdateOrder_UpdatesOrder_WhenOrderExists()
+    public async Task Update_UpdatesOrder_WhenOrderExists()
     {
         // Arrange
         var order = new SampleOrder
@@ -140,7 +144,7 @@ public class SampleOrderControllerTests
         };
 
         // Act
-        var result = await _controller.UpdateOrder(1, order);
+        var result = await _controller.Update(1, order);
 
         // Assert
         Assert.IsType<NoContentResult>(result);
@@ -150,10 +154,10 @@ public class SampleOrderControllerTests
     }
 
     [Fact]
-    public async Task DeleteOrder_DeletesOrder_WhenOrderExists()
+    public async Task Delete_DeletesOrder_WhenOrderExists()
     {
         // Act
-        var result = await _controller.DeleteOrder(1);
+        var result = await _controller.Delete(1);
 
         // Assert
         Assert.IsType<NoContentResult>(result);

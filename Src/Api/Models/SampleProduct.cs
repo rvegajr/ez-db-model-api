@@ -1,12 +1,17 @@
-using System.ComponentModel.DataAnnotations;
-using Api.Interfaces;
-
 namespace Api.Models;
+
+public interface ISampleProduct
+{
+    int ProductId { get; set; }
+    string Name { get; set; }
+    decimal Price { get; set; }
+    string Description { get; set; }
+}
 
 public class SampleProduct : ISampleProduct
 {
     [Key]
-    public int Id { get; set; }
+    public int ProductId { get; set; }
 
     [Required]
     [MaxLength(100)]

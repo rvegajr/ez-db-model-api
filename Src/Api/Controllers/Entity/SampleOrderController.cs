@@ -1,17 +1,12 @@
-using Microsoft.AspNetCore.Mvc;
-using Api.Infrastructure.Base;
-using Api.Models;
-using Api.Repositories;
-
 namespace Api.Controllers;
 
 [ApiController]
 [Route("[controller]")]
 public class SampleOrderController : GenericController<SampleOrder, int>
 {
-    private readonly IOrderRepository _orderRepository;
+    private readonly ISampleOrderRepository _orderRepository;
 
-    public SampleOrderController(IOrderRepository repository) : base(repository)
+    public SampleOrderController(ISampleOrderRepository repository) : base(repository)
     {
         _orderRepository = repository;
     }
@@ -37,7 +32,7 @@ public class SampleOrderController : GenericController<SampleOrder, int>
         return await base.Create(order);
     }
 
-    public override async Task<ActionResult<SampleOrder>> Update(int id, [FromBody] SampleOrder order)
+    public override async Task<IActionResult> Update(int id, [FromBody] SampleOrder order)
     {
         // Recalculate total amount
         order.TotalAmount = order.OrderDetails.Sum(od => od.Quantity * od.UnitPrice);

@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
-namespace Api.Controllers;
+namespace Api.Controllers.System;
 
 [ApiController]
 [Route("[controller]")]

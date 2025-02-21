@@ -1,30 +1,24 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Api.Controllers;
-using Api.Data;
-using Api.Models;
-using Xunit;
+using Xunit.Abstractions;
 
 namespace Test;
 
-public class SampleOrderDetailControllerTests
+public class SampleOrderDetailControllerTests : TestBase
 {
-    private readonly SampleDbContext _context;
+    private readonly ITestOutputHelper _output;
+    private readonly ISampleOrderDetailRepository _repository;
     private readonly SampleOrderDetailController _controller;
 
-    public SampleOrderDetailControllerTests()
+    public SampleOrderDetailControllerTests(ITestOutputHelper output)
     {
-        var options = new DbContextOptionsBuilder<SampleDbContext>()
-            .UseInMemoryDatabase(databaseName: "TestDb_" + Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new SampleDbContext(options);
-        _controller = new SampleOrderDetailController(_context);
+        _output = output;
+        TestOutputHelper.Initialize(output);
+        _repository = new SampleOrderDetailRepository(_context);
+        _controller = new SampleOrderDetailController(_repository);
 
         // Seed test data
         var product = new SampleProduct
         {
-            Id = 1,
+            ProductId = 1,
             Name = "Test Product",
             Price = 19.99m,
             Description = "Test Description"
@@ -52,35 +46,43 @@ public class SampleOrderDetailControllerTests
     }
 
     [Fact]
-    public async Task GetOrderDetails_ReturnsOrderDetails_WhenOrderExists()
+    public async Task GetAll_ReturnsOrderDetails_WhenOrderExists()
     {
+        _output.WriteLine("\nTesting: Get All Order Details");
+        _output.WriteLine("Checking if we can retrieve all order details from the database");
         // Act
-        var result = await _controller.GetOrderDetails(1);
+        var result = await _controller.GetAll();
 
         // Assert
         var actionResult = Assert.IsType<ActionResult<IEnumerable<SampleOrderDetail>>>(result);
-        var orderDetails = Assert.IsAssignableFrom<IEnumerable<SampleOrderDetail>>(actionResult.Value);
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        var orderDetails = Assert.IsAssignableFrom<IEnumerable<SampleOrderDetail>>(okResult.Value);
         Assert.Single(orderDetails);
     }
 
     [Fact]
-    public async Task GetOrderDetail_ReturnsOrderDetail_WhenOrderDetailExists()
+    public async Task GetById_ReturnsOrderDetail_WhenOrderDetailExists()
     {
+        _output.WriteLine("\nTesting: Get Order Detail By ID");
+        _output.WriteLine("Checking if we can retrieve a specific order detail using its ID");
         // Act
-        var result = await _controller.GetOrderDetail(1, 1);
+        var result = await _controller.GetById(1);
 
         // Assert
         var actionResult = Assert.IsType<ActionResult<SampleOrderDetail>>(result);
-        var orderDetail = Assert.IsType<SampleOrderDetail>(actionResult.Value);
+        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
+        var orderDetail = Assert.IsType<SampleOrderDetail>(okResult.Value);
         Assert.Equal(1, orderDetail.OrderId);
         Assert.Equal(1, orderDetail.ProductId);
     }
 
     [Fact]
-    public async Task GetOrderDetail_ReturnsNotFound_WhenOrderDetailDoesNotExist()
+    public async Task GetById_ReturnsNotFound_WhenOrderDetailDoesNotExist()
     {
+        _output.WriteLine("\nTesting: Get Non-existent Order Detail");
+        _output.WriteLine("Checking if we get NotFound when requesting an order detail that doesn't exist");
         // Act
-        var result = await _controller.GetOrderDetail(999, 999);
+        var result = await _controller.GetById(999);
 
         // Assert
         var actionResult = Assert.IsType<ActionResult<SampleOrderDetail>>(result);
@@ -88,8 +90,10 @@ public class SampleOrderDetailControllerTests
     }
 
     [Fact]
-    public async Task CreateOrderDetail_CreatesOrderDetail_WhenModelIsValid()
+    public async Task Create_CreatesOrderDetail_WhenModelIsValid()
     {
+        _output.WriteLine("\nTesting: Create New Order Detail");
+        _output.WriteLine("Checking if we can create a new order detail with valid data");
         // Arrange
         var newOrderDetail = new SampleOrderDetail
         {
@@ -100,7 +104,7 @@ public class SampleOrderDetailControllerTests
         };
 
         // Act
-        var result = await _controller.CreateOrderDetail(newOrderDetail);
+        var result = await _controller.Create(newOrderDetail);
 
         // Assert
         var actionResult = Assert.IsType<ActionResult<SampleOrderDetail>>(result);
@@ -110,7 +114,7 @@ public class SampleOrderDetailControllerTests
     }
 
     [Fact]
-    public async Task UpdateOrderDetail_UpdatesOrderDetail_WhenOrderDetailExists()
+    public async Task Update_UpdatesOrderDetail_WhenOrderDetailExists()
     {
         // Arrange
         var orderDetail = new SampleOrderDetail
@@ -122,7 +126,7 @@ public class SampleOrderDetailControllerTests
         };
 
         // Act
-        var result = await _controller.UpdateOrderDetail(1, 1, orderDetail);
+        var result = await _controller.Update(1, orderDetail);
 
         // Assert
         Assert.IsType<NoContentResult>(result);
@@ -132,10 +136,10 @@ public class SampleOrderDetailControllerTests
     }
 
     [Fact]
-    public async Task DeleteOrderDetail_DeletesOrderDetail_WhenOrderDetailExists()
+    public async Task Delete_DeletesOrderDetail_WhenOrderDetailExists()
     {
         // Act
-        var result = await _controller.DeleteOrderDetail(1, 1);
+        var result = await _controller.Delete(1);
 
         // Assert
         Assert.IsType<NoContentResult>(result);
