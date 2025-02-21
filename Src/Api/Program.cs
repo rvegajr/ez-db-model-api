@@ -4,8 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Api.Data;
-using Api.Services;
+using Api.Infrastructure.Services;
+using Api.Infrastructure.Builder;
+using Api.Infrastructure.Startup;
+using Api.Infrastructure.Middleware;
 using Api.Repositories;
+using Api.Models;
+using Newtonsoft.Json;
 
 namespace Api;
 
@@ -15,105 +20,96 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-// Configure URLs
-builder.WebHost.UseUrls("http://localhost:5001");
-
-// Add services to the container.
-builder.Services.AddMemoryCache();
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-    });
-builder.Services.AddEndpointsApiExplorer();
-
-// Add DbContext
-builder.Services.AddDbContext<SampleDbContext>(options =>
-    options.UseInMemoryDatabase("SampleDb"));
-
-// Register repositories
-builder.Services.AddScoped<ISampleProductRepository, SampleProductRepository>();
-builder.Services.AddScoped<ISampleOrderRepository, SampleOrderRepository>();
-builder.Services.AddScoped<ISampleOrderDetailRepository, SampleOrderDetailRepository>();
-
-// JWT Configuration
-var jwtKey = "your-super-secret-key-with-at-least-32-characters";
-var issuer = "your-issuer";
-var audience = "your-audience";
-
-builder.Services.AddSingleton(new AuthService(jwtKey, issuer, audience));
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = issuer,
-            ValidAudience = audience,
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtKey))
-        };
-    });
-
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "API", Version = "v1" });
-
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme.",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
+        // Configure services
+        builder.Services.AddControllers()
+            .AddNewtonsoftJson(options =>
             {
-                Reference = new OpenApiReference
+                options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+                options.SerializerSettings.NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore;
+                options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+            });
+        builder.Services.AddEndpointsApiExplorer();
+        builder.Services.AddSwaggerGen();
+        builder.Services.AddHealthChecks();
+        builder.Services.AddMemoryCache();
+
+        // Configure authentication
+        if (!builder.Services.Any(x => x.ServiceType == typeof(Microsoft.AspNetCore.Authentication.IAuthenticationSchemeProvider)))
+        {
+            builder.Services.AddAuthentication(options =>
                 {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
+                    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                })
+                .AddJwtBearer(options =>
+                {
+                    options.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidateIssuer = true,
+                        ValidateAudience = true,
+                        ValidateLifetime = true,
+                        ValidateIssuerSigningKey = true,
+                        ValidIssuer = "your-test-issuer",
+                        ValidAudience = "your-test-audience",
+                        IssuerSigningKey = new SymmetricSecurityKey(
+                            Encoding.UTF8.GetBytes("your-test-secret-key-that-is-long-enough-for-hmacsha256"))
+                    };
+
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnChallenge = async context =>
+                        {
+                            // Skip the default logic
+                            context.HandleResponse();
+
+                            var payload = new ApiResponse<object>
+                            {
+                                Success = false,
+                                Message = "Unauthorized access"
+                            };
+
+                            context.Response.ContentType = "application/json";
+                            context.Response.StatusCode = 401;
+
+                            await context.Response.WriteAsync(JsonConvert.SerializeObject(payload));
+                        }
+                    };
+                });
         }
-    });
-});
 
-builder.Services.AddHealthChecks();
+        // Add services
+        builder.Services.AddDbContext<SampleDbContext>(options =>
+            options.UseInMemoryDatabase("SampleDb"));
+        builder.Services.AddScoped<ISampleProductRepository, SampleProductRepository>();
+        builder.Services.AddScoped<ISampleOrderRepository, SampleOrderRepository>();
+        builder.Services.AddScoped<ISampleOrderDetailRepository, SampleOrderDetailRepository>();
+        builder.Services.AddScoped<IAuthService>(sp => new AuthService(
+            "your-test-secret-key-that-is-long-enough-for-hmacsha256",
+            "your-test-issuer",
+            "your-test-audience"
+        ));
 
-var app = builder.Build();
+        var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+        // Configure middleware
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
 
-    // Initialize the database with sample data
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<SampleDbContext>();
-        context.Database.EnsureCreated();
-    }
-}
+            // Initialize the database
+            using (var scope = app.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<SampleDbContext>();
+                context.Database.EnsureCreated();
+            }
+        }
 
-app.UseRouting();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.UseMiddleware<UnauthorizedMiddleware>();
+        app.MapControllers();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-app.MapHealthChecks("/health");
-
-app.Run();
+        app.Run();
     }
 }

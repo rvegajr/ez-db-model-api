@@ -1,19 +1,32 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
+using Api.Models;
 
 namespace Api.Controllers.System;
 
 [ApiController]
 [Route("[controller]")]
 [Authorize]
-public class HealthController : ControllerBase
+public class HealthController : BaseController
 {
     [HttpGet]
-    public ContentResult Get()
+    public IActionResult Get()
     {
-        var result = new { Status = "Healthy", Timestamp = DateTime.UtcNow };
-        var json = JsonSerializer.Serialize(result);
-        return Content(json, "application/json");
+        try
+        {
+            var result = new HealthResponse
+            {
+                Status = "Healthy",
+                Timestamp = DateTime.UtcNow
+            };
+            Response.ContentType = "application/json";
+            return Ok(result, "System is healthy");
+        }
+        catch (Exception ex)
+        {
+            Response.ContentType = "application/json";
+            return HandleException(ex);
+        }
     }
 }

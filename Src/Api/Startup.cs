@@ -9,7 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Api.Data;
-using Api.Services;
+using Api.Infrastructure.Services;
 
 namespace Api;
 

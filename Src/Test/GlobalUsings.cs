@@ -17,5 +17,5 @@ global using Api.Infrastructure.Base;
 global using Api.Infrastructure.Caching;
 global using Api.Models;
 global using Api.Repositories;
-global using Api.Services;
+global using Api.Infrastructure.Services;
 global using Xunit;
