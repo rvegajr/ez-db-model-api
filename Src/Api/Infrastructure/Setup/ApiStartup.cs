@@ -16,16 +16,16 @@ public static class EdmModelBuilder
         // Configure entity sets
         builder.EntitySet<SampleProduct>("SampleProducts");
         builder.EntitySet<SampleOrder>("SampleOrders");
-        builder.EntitySet<SampleOrderDetail>("SampleOrderDetails");
+        builder.EntitySet<SampleCompoundKeyOrderDetail>("SampleOrderDetails");
 
         // Configure relationships
         builder.EntityType<SampleOrder>()
             .HasMany(o => o.OrderDetails);
 
-        builder.EntityType<SampleOrderDetail>()
+        builder.EntityType<SampleCompoundKeyOrderDetail>()
             .HasOptional(d => d.Order);
 
-        builder.EntityType<SampleOrderDetail>()
+        builder.EntityType<SampleCompoundKeyOrderDetail>()
             .HasOptional(d => d.Product);
 
         return builder.GetEdmModel();
@@ -64,19 +64,28 @@ public class ApiStartup
                 options.SerializerSettings.NullValueHandling = NullValueHandling.Ignore;
                 options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
             })
-            .AddOData(options => options
-                .Select()
-                .Filter()
-                .OrderBy()
-                .SetMaxTop(100)
-                .Count()
-                .Expand()
-                .AddRouteComponents("odata", EdmModelBuilder.GetEdmModel()));
+            .AddOData(options => 
+            {
+                options.Select()
+                       .Filter()
+                       .OrderBy()
+                       .SetMaxTop(100)
+                       .Count()
+                       .Expand();
+                       
+                options.AddRouteComponents("odata", EdmModelBuilder.GetEdmModel());
+                
+                // Configure unique route prefixes for each controller
+                options.RouteOptions.EnableControllerNameCaseInsensitive = true;
+                options.RouteOptions.EnableActionNameCaseInsensitive = true;
+                options.RouteOptions.EnablePropertyNameCaseInsensitive = true;
+            });
 
         // Add common services
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddHealthChecks();
         builder.Services.AddMemoryCache();
+        builder.Services.AddHttpClient();
 
         // Configure API behavior
         builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -98,19 +107,24 @@ public class ApiStartup
 
     public virtual void ConfigureMiddleware(WebApplication app)
     {
-        app.UseODataRouteDebug();
-        if (app.Environment.IsDevelopment())
-        {
-            app.UseSwagger();
-            app.UseSwaggerUI();
-        }
+        app.UseSwagger(c => {
+            c.SerializeAsV2 = false;
+        });
+        app.UseSwaggerUI(c => {
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "API v1");
+            c.RoutePrefix = "swagger";
+        });
 
         app.UseHttpsRedirection();
         app.UseCors("AllowAll");
+        app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();
+        
+        app.UseODataRouteDebug();
+        app.UseODataBatching();
+        
         app.MapControllers();
         app.MapHealthChecks("/health");
-        app.UseODataBatching();
     }
 }

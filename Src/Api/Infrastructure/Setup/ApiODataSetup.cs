@@ -47,16 +47,16 @@ public class ApiODataSetup
         // Configure entity sets
         builder.EntitySet<SampleProduct>("SampleProducts");
         builder.EntitySet<SampleOrder>("SampleOrders");
-        builder.EntitySet<SampleOrderDetail>("SampleOrderDetails");
+        builder.EntitySet<SampleCompoundKeyOrderDetail>("SampleOrderDetails");
 
         // Configure relationships
         builder.EntityType<SampleOrder>()
             .HasMany(o => o.OrderDetails);
 
-        builder.EntityType<SampleOrderDetail>()
+        builder.EntityType<SampleCompoundKeyOrderDetail>()
             .HasOptional(d => d.Order);
 
-        builder.EntityType<SampleOrderDetail>()
+        builder.EntityType<SampleCompoundKeyOrderDetail>()
             .HasOptional(d => d.Product);
 
         return builder.GetEdmModel();

@@ -8,7 +8,16 @@ using Microsoft.AspNetCore.OData.Query.Validator;
 
 namespace Api.Controllers.OData;
 
-public class SampleProductsController : ODataController
+public interface ISampleProductsController
+{
+    IActionResult Get();
+    Task<IActionResult> GetByKey(int key);
+    Task<IActionResult> Post([FromBody] SampleProduct product);
+    Task<IActionResult> Put(int key, [FromBody] SampleProduct product);
+    Task<IActionResult> Delete(int key);
+}
+
+public class SampleProductsController : ODataController, ISampleProductsController
 {
     private readonly ISampleProductRepository _repository;
 
@@ -55,7 +64,7 @@ public class SampleProductsController : ODataController
     }
 
     [EnableQuery]
-    public async Task<IActionResult> Get([FromRoute] int key)
+    public async Task<IActionResult> GetByKey([FromRoute] int key)
     {
         var product = await _repository.GetByIdAsync(key);
         if (product == null)

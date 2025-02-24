@@ -40,11 +40,28 @@ public class Startup
             options.UseInMemoryDatabase("SampleDb"));
 
         // JWT Configuration
-        var jwtKey = "your-super-secret-key-with-at-least-32-characters";
-        var issuer = "your-issuer";
-        var audience = "your-audience";
+        services.Configure<AuthSettings>(settings =>
+        {
+            settings.Key = "your-super-secret-key-with-at-least-32-characters";
+            settings.Issuer = "your-issuer";
+            settings.Audience = "your-audience";
+        });
 
-        services.AddSingleton(new AuthService(jwtKey, issuer, audience));
+        services.AddScoped<IAuthService, AuthService>();
+
+        var authSettings = new AuthSettings
+        {
+            Key = "your-super-secret-key-with-at-least-32-characters",
+            Issuer = "your-issuer",
+            Audience = "your-audience"
+        };
+
+        services.Configure<AuthSettings>(settings =>
+        {
+            settings.Key = authSettings.Key;
+            settings.Issuer = authSettings.Issuer;
+            settings.Audience = authSettings.Audience;
+        });
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -55,10 +72,10 @@ public class Startup
                     ValidateAudience = true,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = issuer,
-                    ValidAudience = audience,
+                    ValidIssuer = authSettings.Issuer,
+                    ValidAudience = authSettings.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(
-                        Encoding.UTF8.GetBytes(jwtKey))
+                        Encoding.UTF8.GetBytes(authSettings.Key))
                 };
             });
 

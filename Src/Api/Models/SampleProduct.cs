@@ -25,5 +25,5 @@ public class SampleProduct : ISampleProduct
     public string Description { get; set; } = string.Empty;
 
     // Navigation property
-    public virtual ICollection<SampleOrderDetail> OrderDetails { get; set; } = new List<SampleOrderDetail>();
+    public virtual ICollection<SampleCompoundKeyOrderDetail> OrderDetails { get; set; } = new List<SampleCompoundKeyOrderDetail>();
 }

@@ -6,7 +6,16 @@ using Api.Repositories;
 
 namespace Api.Controllers.OData;
 
-public class SampleOrdersController : ODataController
+public interface ISampleOrdersController
+{
+    IActionResult Get();
+    Task<IActionResult> GetByKey(int key);
+    Task<IActionResult> Post([FromBody] SampleOrder order);
+    Task<IActionResult> Put(int key, [FromBody] SampleOrder order);
+    Task<IActionResult> Delete(int key);
+}
+
+public class SampleOrdersController : ODataController, ISampleOrdersController
 {
     private readonly ISampleOrderRepository _repository;
 
@@ -22,7 +31,7 @@ public class SampleOrdersController : ODataController
     }
 
     [EnableQuery]
-    public async Task<IActionResult> Get([FromRoute] int key)
+    public async Task<IActionResult> GetByKey([FromRoute] int key)
     {
         var order = await _repository.GetByIdAsync(key);
         if (order == null)

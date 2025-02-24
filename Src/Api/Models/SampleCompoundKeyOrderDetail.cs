@@ -1,7 +1,7 @@
 namespace Api.Models;
 
 // Model with compound key
-public class SampleOrderDetail
+public class SampleCompoundKeyOrderDetail
 {
     [Key]
     [Column(Order = 1)]

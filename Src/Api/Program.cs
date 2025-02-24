@@ -26,8 +26,16 @@ public class Program
         // Configure database
         ApiDatabaseSetup.Instance.ConfigureDatabase(builder, "SampleDb");
 
+        // Configure auth service
+        builder.Services.Configure<AuthSettings>(settings =>
+        {
+            settings.Key = key;
+            settings.Issuer = issuer;
+            settings.Audience = audience;
+        });
+
         // Add auth service
-        builder.Services.AddScoped<IAuthService>(sp => new AuthService(key, issuer, audience));
+        builder.Services.AddScoped<IAuthService, AuthService>();
 
         var app = builder.Build();
 

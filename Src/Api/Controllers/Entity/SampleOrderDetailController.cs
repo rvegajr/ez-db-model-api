@@ -2,7 +2,7 @@ namespace Api.Controllers.Entity;
 
 [ApiController]
 [Route("[controller]")]
-public class SampleOrderDetailController : GenericController<SampleOrderDetail, int>
+public class SampleOrderDetailController : GenericController<SampleCompoundKeyOrderDetail, int>
 {
     private readonly ISampleOrderDetailRepository _orderDetailRepository;
 
@@ -12,7 +12,7 @@ public class SampleOrderDetailController : GenericController<SampleOrderDetail, 
     }
 
     [HttpGet("order/{orderId}")]
-    public async Task<ActionResult<IEnumerable<SampleOrderDetail>>> GetOrderDetailsByOrder(int orderId)
+    public async Task<ActionResult<IEnumerable<SampleCompoundKeyOrderDetail>>> GetOrderDetailsByOrder(int orderId)
     {
         var orderDetails = await _orderDetailRepository.GetOrderDetailsByOrderAsync(orderId);
         return Ok(orderDetails);
@@ -25,7 +25,7 @@ public class SampleOrderDetailController : GenericController<SampleOrderDetail, 
         return Ok(total);
     }
 
-    protected override int GetEntityId(SampleOrderDetail entity)
+    protected override int GetEntityId(SampleCompoundKeyOrderDetail entity)
     {
         return entity.OrderId;
     }

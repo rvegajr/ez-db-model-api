@@ -9,24 +9,24 @@ public class SampleDbContext : DbContext
 
     public DbSet<SampleProduct> Products { get; set; }
     public DbSet<SampleOrder> Orders { get; set; }
-    public DbSet<SampleOrderDetail> OrderDetails { get; set; }
+    public DbSet<SampleCompoundKeyOrderDetail> OrderDetails { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         // Configure composite key for OrderDetail
-        modelBuilder.Entity<SampleOrderDetail>()
+        modelBuilder.Entity<SampleCompoundKeyOrderDetail>()
             .HasKey(od => new { od.OrderId, od.ProductId });
 
         // Configure relationships
-        modelBuilder.Entity<SampleOrderDetail>()
+        modelBuilder.Entity<SampleCompoundKeyOrderDetail>()
             .HasOne(od => od.Order)
             .WithMany(o => o.OrderDetails)
             .HasForeignKey(od => od.OrderId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        modelBuilder.Entity<SampleOrderDetail>()
+        modelBuilder.Entity<SampleCompoundKeyOrderDetail>()
             .HasOne(od => od.Product)
             .WithMany(p => p.OrderDetails)
             .HasForeignKey(od => od.ProductId)
@@ -60,15 +60,15 @@ public class SampleDbContext : DbContext
             }
         );
 
-        modelBuilder.Entity<SampleOrderDetail>().HasData(
-            new SampleOrderDetail
+        modelBuilder.Entity<SampleCompoundKeyOrderDetail>().HasData(
+            new SampleCompoundKeyOrderDetail
             {
                 OrderId = 1,
                 ProductId = 1,
                 Quantity = 2,
                 UnitPrice = 19.99M
             },
-            new SampleOrderDetail
+            new SampleCompoundKeyOrderDetail
             {
                 OrderId = 1,
                 ProductId = 2,

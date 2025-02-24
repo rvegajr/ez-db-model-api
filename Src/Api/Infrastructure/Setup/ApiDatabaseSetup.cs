@@ -1,6 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Api.Data;
 using Api.Repositories;
+using Api.Controllers.OData;
+using Api.Infrastructure.DI;
+using Api.Infrastructure.Base;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Infrastructure.Setup;
 
@@ -31,10 +35,17 @@ public class ApiDatabaseSetup
         builder.Services.AddDbContext<SampleDbContext>(options =>
             options.UseInMemoryDatabase(databaseName));
 
-        // Add repositories
-        builder.Services.AddScoped<ISampleProductRepository, SampleProductRepository>();
-        builder.Services.AddScoped<ISampleOrderRepository, SampleOrderRepository>();
-        builder.Services.AddScoped<ISampleOrderDetailRepository, SampleOrderDetailRepository>();
+        // Register generic repository
+        builder.Services.AddScoped(typeof(IGenericRepository<,>), typeof(GenericRepository<,>));
+
+        // Auto-register services
+        builder.Services.AutoRegisterServices(options =>
+        {
+            options.AddAssemblyPattern("Api*")
+                   .AddAssemblyPattern("Data*");
+            options.EnableInterfaceMatching = true;
+            options.DefaultLifetime = ServiceLifetime.Scoped;
+        });
     }
 
     public virtual void EnsureDatabaseCreated(WebApplication app)

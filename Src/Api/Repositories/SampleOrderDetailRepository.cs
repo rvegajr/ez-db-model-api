@@ -3,19 +3,19 @@ using Api.Models;
 
 namespace Api.Repositories;
 
-public interface ISampleOrderDetailRepository : IGenericRepository<SampleOrderDetail, int>
+public interface ISampleOrderDetailRepository : IGenericRepository<SampleCompoundKeyOrderDetail, int>
 {
-    Task<IEnumerable<SampleOrderDetail>> GetOrderDetailsByOrderAsync(int orderId);
+    Task<IEnumerable<SampleCompoundKeyOrderDetail>> GetOrderDetailsByOrderAsync(int orderId);
     Task<decimal> GetOrderDetailTotalAsync(int orderDetailId);
 }
 
-public class SampleOrderDetailRepository : GenericRepository<SampleOrderDetail, int>, ISampleOrderDetailRepository
+public class SampleOrderDetailRepository : GenericRepository<SampleCompoundKeyOrderDetail, int>, ISampleOrderDetailRepository
 {
     public SampleOrderDetailRepository(SampleDbContext context) : base(context)
     {
     }
 
-    public async Task<IEnumerable<SampleOrderDetail>> GetOrderDetailsByOrderAsync(int orderId)
+    public async Task<IEnumerable<SampleCompoundKeyOrderDetail>> GetOrderDetailsByOrderAsync(int orderId)
     {
         return await _dbSet
             .Include(od => od.Product)
@@ -32,7 +32,7 @@ public class SampleOrderDetailRepository : GenericRepository<SampleOrderDetail, 
         return orderDetail?.Quantity * orderDetail?.UnitPrice ?? 0;
     }
 
-    public override async Task<SampleOrderDetail?> GetByIdAsync(int id)
+    public override async Task<SampleCompoundKeyOrderDetail?> GetByIdAsync(int id)
     {
         return await _dbSet
             .Include(od => od.Product)

@@ -6,7 +6,16 @@ using Api.Repositories;
 
 namespace Api.Controllers.OData;
 
-public class SampleOrderDetailsController : ODataController
+public interface ISampleOrderDetailsController
+{
+    IActionResult Get();
+    Task<IActionResult> GetByKey(int key);
+    Task<IActionResult> Post([FromBody] SampleCompoundKeyOrderDetail orderDetail);
+    Task<IActionResult> Put(int key, [FromBody] SampleCompoundKeyOrderDetail orderDetail);
+    Task<IActionResult> Delete(int key);
+}
+
+public class SampleOrderDetailsController : ODataController, ISampleOrderDetailsController
 {
     private readonly ISampleOrderDetailRepository _repository;
 
@@ -16,13 +25,13 @@ public class SampleOrderDetailsController : ODataController
     }
 
     [EnableQuery]
-    public async Task<IActionResult> Get()
+    public IActionResult Get()
     {
-        return Ok(await _repository.GetAllAsync());
+        return Ok(_repository.GetAsQueryable());
     }
 
     [EnableQuery]
-    public async Task<IActionResult> Get([FromRoute] int key)
+    public async Task<IActionResult> GetByKey([FromRoute] int key)
     {
         var orderDetail = await _repository.GetByIdAsync(key);
         if (orderDetail == null)
@@ -32,7 +41,7 @@ public class SampleOrderDetailsController : ODataController
         return Ok(orderDetail);
     }
 
-    public async Task<IActionResult> Post([FromBody] SampleOrderDetail orderDetail)
+    public async Task<IActionResult> Post([FromBody] SampleCompoundKeyOrderDetail orderDetail)
     {
         if (!ModelState.IsValid)
         {
@@ -43,7 +52,7 @@ public class SampleOrderDetailsController : ODataController
         return Created(result);
     }
 
-    public async Task<IActionResult> Put([FromRoute] int key, [FromBody] SampleOrderDetail orderDetail)
+    public async Task<IActionResult> Put([FromRoute] int key, [FromBody] SampleCompoundKeyOrderDetail orderDetail)
     {
         if (!ModelState.IsValid)
         {

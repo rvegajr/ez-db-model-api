@@ -2,26 +2,23 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Api.Models;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Api.Infrastructure.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly string _jwtKey;
-    private readonly string _issuer;
-    private readonly string _audience;
+    private readonly AuthSettings _settings;
 
-    public AuthService(string jwtKey, string issuer, string audience)
+    public AuthService(IOptions<AuthSettings> settings)
     {
-        _jwtKey = jwtKey;
-        _issuer = issuer;
-        _audience = audience;
+        _settings = settings.Value;
     }
 
     public string GenerateToken(string username)
     {
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtKey));
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
@@ -31,8 +28,8 @@ public class AuthService : IAuthService
         };
 
         var token = new JwtSecurityToken(
-            issuer: _issuer,
-            audience: _audience,
+            issuer: _settings.Issuer,
+            audience: _settings.Audience,
             claims: claims,
             expires: DateTime.UtcNow.AddHours(1),
             signingCredentials: credentials

@@ -1,4 +1,5 @@
 using Microsoft.OpenApi.Models;
+using Api.Infrastructure.Swagger;
 
 namespace Api.Infrastructure.Setup;
 
@@ -28,7 +29,17 @@ public class ApiSwaggerSetup
     {
         builder.Services.AddSwaggerGen(c =>
         {
-            c.SwaggerDoc("v1", new OpenApiInfo { Title = "API", Version = "v1" });
+            c.SwaggerDoc("v1", new OpenApiInfo { 
+                Title = "OData API", 
+                Version = "v1",
+                Description = "API with OData support for querying and filtering data"
+            });
+
+            // Add OData query parameters to Swagger
+            c.OperationFilter<ODataOperationFilter>();
+
+            // Configure operation IDs to be unique
+            c.CustomOperationIds(apiDesc => ConflictingActionsResolver.ResolveConflictingActions(apiDesc));
 
             c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
             {
@@ -53,6 +64,17 @@ public class ApiSwaggerSetup
                     Array.Empty<string>()
                 }
             });
+
+            // Configure XML comments if available
+            var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+            if (File.Exists(xmlPath))
+            {
+                c.IncludeXmlComments(xmlPath);
+            }
+
+            // Configure document filter to handle OData endpoints
+            c.DocumentFilter<ODataDocumentFilter>();
         });
     }
 }

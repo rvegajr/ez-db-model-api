@@ -25,5 +25,5 @@ public class SampleOrder : ISampleOrder
     public decimal TotalAmount { get; set; }
 
     // Navigation property
-    public virtual ICollection<SampleOrderDetail> OrderDetails { get; set; } = new List<SampleOrderDetail>();
+    public virtual ICollection<SampleCompoundKeyOrderDetail> OrderDetails { get; set; } = new List<SampleCompoundKeyOrderDetail>();
 }

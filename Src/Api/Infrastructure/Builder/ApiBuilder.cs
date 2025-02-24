@@ -39,12 +39,19 @@ public class ApiBuilder : ApiBuilderBase
 
     public ApiBuilder ConfigureAuth()
     {
-        var jwtKey = "your-super-secret-key-with-at-least-32-characters";
+        var key = "your-super-secret-key-with-at-least-32-characters";
         var issuer = "your-issuer";
         var audience = "your-audience";
 
-        _services.AddSingleton(new AuthService(jwtKey, issuer, audience));
-        base.ConfigureAuthentication(jwtKey, issuer, audience);
+        _services.Configure<AuthSettings>(settings =>
+        {
+            settings.Key = key;
+            settings.Issuer = issuer;
+            settings.Audience = audience;
+        });
+
+        _services.AddScoped<IAuthService, AuthService>();
+        base.ConfigureAuthentication(key, issuer, audience);
 
         return this;
     }
