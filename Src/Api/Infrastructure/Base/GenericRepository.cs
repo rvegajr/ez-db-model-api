@@ -2,18 +2,6 @@ using System.Linq.Expressions;
 
 namespace Api.Infrastructure.Base;
 
-public interface IGenericRepository<TEntity, TKey> where TEntity : class
-{
-    IQueryable<TEntity> GetAsQueryable();
-    Task<TEntity?> GetByIdAsync(TKey id);
-    Task<TEntity> CreateAsync(TEntity entity);
-    Task<TEntity?> UpdateAsync(TEntity entity);
-    Task<TEntity?> DeleteAsync(TKey id);
-    Task<bool> ExistsAsync(TKey id);
-    Task<IEnumerable<TEntity>> GetAllAsync();
-    Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate);
-}
-
 public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey> where TEntity : class
 {
     protected readonly SampleDbContext _context;
@@ -29,51 +17,45 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
 
     public virtual async Task<TEntity?> GetByIdAsync(TKey id)
     {
-        if (typeof(TEntity) == typeof(SampleOrderDetail))
-        {
-            // For SampleOrderDetail, we need both OrderId and ProductId
-            return await _dbSet.FirstOrDefaultAsync(e => EF.Property<int>(e, "OrderId").Equals(id));
-        }
-
         var propertyName = typeof(TEntity).Name switch
         {
             "SampleProduct" => "ProductId",
             "SampleOrder" => "OrderId",
+            "SampleOrderDetail" => "OrderId",
             _ => "Id"
         };
 
-        return await _dbSet.FirstOrDefaultAsync(e => EF.Property<TKey>(e, propertyName).Equals(id));
+        var result = await _dbSet.FirstOrDefaultAsync(e => EF.Property<TKey>(e, propertyName).Equals(id));
+        return result;
     }
 
-    public virtual async Task<TEntity> CreateAsync(TEntity entity)
+    public virtual async Task<TEntity> AddAsync(TEntity entity)
     {
         _dbSet.Add(entity);
         await _context.SaveChangesAsync();
         return entity;
     }
 
-    public virtual async Task<TEntity?> UpdateAsync(TEntity entity)
+    public virtual async Task<TEntity> UpdateAsync(TEntity entity)
     {
-        var idProperty = typeof(TEntity).GetProperty(typeof(TEntity).Name == "SampleProduct" ? "ProductId" : "OrderId");
-        if (idProperty == null) return null;
+        var idProperty = typeof(TEntity).GetProperty(typeof(TEntity).Name == "SampleProduct" ? "ProductId" : "OrderId")
+            ?? throw new InvalidOperationException($"Entity {typeof(TEntity).Name} does not have an ID property.");
 
-        var id = (TKey)idProperty.GetValue(entity);
-        var existingEntity = await GetByIdAsync(id);
-        if (existingEntity == null) return null;
+        var id = (TKey)idProperty.GetValue(entity)
+            ?? throw new InvalidOperationException($"ID property of {typeof(TEntity).Name} is null.");
+
+        var existingEntity = await GetByIdAsync(id)
+            ?? throw new InvalidOperationException($"Entity {typeof(TEntity).Name} with ID {id} not found.");
 
         _context.Entry(existingEntity).CurrentValues.SetValues(entity);
         await _context.SaveChangesAsync();
         return existingEntity;
     }
 
-    public virtual async Task<TEntity?> DeleteAsync(TKey id)
+    public virtual async Task DeleteAsync(TEntity entity)
     {
-        var entity = await GetByIdAsync(id);
-        if (entity == null) return null;
-
         _dbSet.Remove(entity);
         await _context.SaveChangesAsync();
-        return entity;
     }
 
     public virtual async Task<bool> ExistsAsync(TKey id)

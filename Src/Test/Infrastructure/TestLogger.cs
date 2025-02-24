@@ -20,7 +20,7 @@ public static class TestLogger
             Content = content
         };
 
-        var json = JsonSerializer.Serialize(log, new JsonSerializerOptions 
+        var json = System.Text.Json.JsonSerializer.Serialize(log, new JsonSerializerOptions 
         { 
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase

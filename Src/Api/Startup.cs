@@ -10,6 +10,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Api.Data;
 using Api.Infrastructure.Services;
+using Microsoft.AspNetCore.OData;
+using Api.Models;
 
 namespace Api;
 
@@ -24,7 +26,13 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddControllers();
+        services.AddControllers()
+            .AddOData(opt => opt.Select().Filter().OrderBy().Expand().Count().SetMaxTop(100))
+            .AddNewtonsoftJson(options =>
+            {
+                options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
+                options.SerializerSettings.NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore;
+            });
         services.AddEndpointsApiExplorer();
 
         // Add DbContext

@@ -34,7 +34,7 @@ public abstract class GenericController<TEntity, TKey> : ControllerBase
     [HttpPost]
     public virtual async Task<ActionResult<TEntity>> Create([FromBody] TEntity entity)
     {
-        var result = await _repository.CreateAsync(entity);
+        var result = await _repository.AddAsync(entity);
         return CreatedAtAction(nameof(GetById), new { id = GetEntityId(result) }, result);
     }
 
@@ -52,8 +52,9 @@ public abstract class GenericController<TEntity, TKey> : ControllerBase
     [HttpDelete("{id}")]
     public virtual async Task<IActionResult> Delete(TKey id)
     {
-        var result = await _repository.DeleteAsync(id);
-        if (result == null) return NotFound();
+        var entity = await _repository.GetByIdAsync(id);
+        if (entity == null) return NotFound();
+        await _repository.DeleteAsync(entity);
         return NoContent();
     }
 
