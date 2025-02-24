@@ -3,6 +3,7 @@ namespace Api.Models;
 public interface ISampleOrder
 {
     int OrderId { get; set; }
+    int CustomerId { get; set; }
     DateTime OrderDate { get; set; }
     string CustomerName { get; set; }
     decimal TotalAmount { get; set; }
@@ -12,6 +13,9 @@ public class SampleOrder : ISampleOrder
 {
     [Key]
     public int OrderId { get; set; }
+
+    [Required]
+    public int CustomerId { get; set; }
 
     [Required]
     public DateTime OrderDate { get; set; }

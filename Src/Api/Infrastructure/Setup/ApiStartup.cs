@@ -16,7 +16,7 @@ public static class EdmModelBuilder
         // Configure entity sets
         builder.EntitySet<SampleProduct>("SampleProducts");
         builder.EntitySet<SampleOrder>("SampleOrders");
-        builder.EntitySet<SampleCompoundKeyOrderDetail>("SampleOrderDetails");
+        builder.EntitySet<SampleCompoundKeyOrderDetail>("SampleCompoundKeyOrderDetails");
 
         // Configure relationships
         builder.EntityType<SampleOrder>()
@@ -86,6 +86,15 @@ public class ApiStartup
         builder.Services.AddHealthChecks();
         builder.Services.AddMemoryCache();
         builder.Services.AddHttpClient();
+
+        // Auto-register services
+        builder.Services.Scan(scan => scan
+            .FromAssemblyOf<Program>()
+            .AddClasses(classes => classes.Where(type => 
+                type.Name.EndsWith("Service") ||
+                type.Name.EndsWith("Repository")))
+            .AsImplementedInterfaces()
+            .WithScopedLifetime());
 
         // Configure API behavior
         builder.Services.Configure<ApiBehaviorOptions>(options =>

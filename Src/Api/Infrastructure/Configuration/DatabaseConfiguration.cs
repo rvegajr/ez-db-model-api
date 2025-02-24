@@ -13,7 +13,7 @@ public static class DatabaseConfiguration
 
         services.AddScoped<ISampleProductRepository, SampleProductRepository>();
         services.AddScoped<ISampleOrderRepository, SampleOrderRepository>();
-        services.AddScoped<ISampleOrderDetailRepository, SampleOrderDetailRepository>();
+        services.AddScoped<ISampleCompoundKeyOrderDetailRepository, SampleCompoundKeyOrderDetailRepository>();
 
         return services;
     }

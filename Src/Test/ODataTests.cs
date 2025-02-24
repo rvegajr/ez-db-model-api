@@ -12,7 +12,8 @@ public class ODataResponse<T>
     public List<T> Value { get; set; } = new List<T>();
 }
 
-public class ODataTests : IClassFixture<TestWebApplicationFactory<Program>>, IDisposable
+[Collection("TestCollection")]
+public class ODataTests : IClassFixture<TestWebApplicationFactory<Program>>, IDisposable, IAsyncLifetime
 {
     private readonly HttpClient _client;
     private readonly TestWebApplicationFactory<Program> _factory;
@@ -35,9 +36,7 @@ public class ODataTests : IClassFixture<TestWebApplicationFactory<Program>>, IDi
         var token = _factory.GetJwtToken();
         _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        // Ensure database is seeded
-        var context = _scope.ServiceProvider.GetRequiredService<SampleDbContext>();
-        _factory.SeedDatabase(context);
+        // Database will be seeded in InitializeAsync
     }
 
     [Fact]
@@ -176,7 +175,7 @@ public class ODataTests : IClassFixture<TestWebApplicationFactory<Program>>, IDi
             await context.Database.EnsureCreatedAsync();
             Console.WriteLine("Database cleared and recreated");
 
-            _factory.SeedDatabase(context); // Seed the database
+            _factory.SeedDatabase(); // Seed the database
             
             // Verify database state in multiple ways
             Console.WriteLine("\n=== VERIFYING DATABASE STATE ===");
@@ -240,24 +239,24 @@ public class ODataTests : IClassFixture<TestWebApplicationFactory<Program>>, IDi
         }
 
         // Try getting all products first
-        var allQuery = "";
+        var allQuery = "?$orderby=ProductId";
         var allContent = await _httpService.HttpGetAsString(baseUrl + allQuery);
         Log($"\n=== ALL PRODUCTS QUERY ===\nURL: {baseUrl + allQuery}\nResponse:\n{JObject.Parse(allContent).ToString(Formatting.Indented)}\n=== END ALL PRODUCTS QUERY ===");
 
         // Try simple query
-        var simpleQuery = "?$top=1";
+        var simpleQuery = "?$top=1&$orderby=ProductId";
         var simpleContent = await _httpService.HttpGetAsString(baseUrl + simpleQuery);
         Log($"\n=== SIMPLE QUERY ===\nURL: {baseUrl + simpleQuery}\nResponse:\n{JObject.Parse(simpleContent).ToString(Formatting.Indented)}\n=== END SIMPLE QUERY ===");
 
         // Now try the pagination queries
-        var firstPageQuery = "?$top=2";
+        var firstPageQuery = "?$top=2&$orderby=ProductId";
         Log($"\nMaking first page request: {baseUrl + firstPageQuery}");
         var firstPageContent = await _httpService.HttpGetAsString(baseUrl + firstPageQuery);
         Log($"\n=== FIRST PAGE REQUEST ===\nURL: {baseUrl + firstPageQuery}\nResponse:\n{JObject.Parse(firstPageContent).ToString(Formatting.Indented)}\n=== END FIRST PAGE ===");
         var firstPageResponse = JsonConvert.DeserializeObject<ODataResponse<SampleProduct>>(firstPageContent);
         Log($"First page value count: {firstPageResponse?.Value?.Count ?? 0}");
 
-        var secondPageQuery = "?$skip=2&$top=2";
+        var secondPageQuery = "?$skip=2&$top=1&$orderby=ProductId";
         Log($"\nMaking second page request: {baseUrl + secondPageQuery}");
         var secondPageContent = await _httpService.HttpGetAsString(baseUrl + secondPageQuery);
         Log($"\n=== SECOND PAGE REQUEST ===\nURL: {baseUrl + secondPageQuery}\nResponse:\n{JObject.Parse(secondPageContent).ToString(Formatting.Indented)}\n=== END SECOND PAGE ===");
@@ -267,18 +266,27 @@ public class ODataTests : IClassFixture<TestWebApplicationFactory<Program>>, IDi
         // Assert
         Assert.NotNull(firstPageResponse);
         Assert.NotNull(secondPageResponse);
-        Assert.Equal(2, firstPageResponse.Value.Count);
-        Assert.Equal(2, secondPageResponse.Value.Count);
+        Assert.Equal(2, firstPageResponse!.Value.Count);
+        Assert.Equal(1, secondPageResponse!.Value.Count);
 
         // Verify the actual products returned
         Assert.Equal(1, firstPageResponse.Value[0].ProductId);  // First page should have products 1,2
         Assert.Equal(2, firstPageResponse.Value[1].ProductId);
-        Assert.Equal(3, secondPageResponse.Value[0].ProductId); // Second page should have products 3,4
-        Assert.Equal(4, secondPageResponse.Value[1].ProductId);
+        Assert.Equal(3, secondPageResponse.Value[0].ProductId);  // Second page should have product 3
     }
 
     public void Dispose()
     {
         _scope?.Dispose();
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _factory.SeedDatabase();
+    }
+
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
     }
 }

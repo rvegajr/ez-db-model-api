@@ -1,186 +1,44 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http.Headers;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData;
-using Microsoft.AspNetCore.Mvc.ApplicationParts;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OData.Edm;
-using Microsoft.OData.ModelBuilder;
-using Microsoft.OData.UriParser;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 
 namespace Test.Infrastructure;
 
 public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgram> where TProgram : class
 {
-    private string _odataPrefix;
-
-
-    public string GetJwtToken()
-    {
-        using var scope = Services.CreateScope();
-        var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
-        return authService.GenerateToken("test-user");
-    }
-
-    public string GetODataPrefix()
-    {
-        return _odataPrefix;
-    }
-    public void SeedDatabase(SampleDbContext context)
-    {
-        try
-        {
-            Console.WriteLine("Starting database seeding...");
-            context.Database.EnsureDeleted();
-            context.Database.EnsureCreated();
-            Console.WriteLine("Database recreated");
-
-            Console.WriteLine("\n=== SEEDING DATABASE ===");
-            Console.WriteLine($"Database exists: {context.Database.EnsureCreated()}");
-            Console.WriteLine($"Products before seeding: {context.Products.Count()}");
-
-            // Clear existing products
-            var existingProducts = context.Products.ToList();
-            if (existingProducts.Any())
-            {
-                Console.WriteLine($"Removing {existingProducts.Count} existing products...");
-                context.Products.RemoveRange(existingProducts);
-                context.SaveChanges();
-            }
-
-            // Create new test products
-            var products = new List<SampleProduct>();
-            for (int i = 1; i <= 5; i++)
-            {
-                var product = new SampleProduct
-                {
-                    ProductId = i,
-                    Name = $"Sample Product {i}",
-                    Price = i * 10.00m,
-                    Description = $"This is sample product {i}"
-                };
-                products.Add(product);
-                Console.WriteLine($"Created product: {JsonConvert.SerializeObject(product)}");
-            }
-
-            Console.WriteLine($"Adding {products.Count} products...");
-            context.Products.AddRange(products);
-            context.SaveChanges();
-            Console.WriteLine($"Products after seeding: {context.Products.Count()}");
-            Console.WriteLine("=== END SEEDING DATABASE ===");
-            
-            var seededProducts = context.Products.OrderBy(p => p.ProductId).ToList();
-            Console.WriteLine($"Products after seeding: {context.Products.Count()}");
-            Console.WriteLine($"Seeded products: {JsonConvert.SerializeObject(seededProducts)}");
-
-            // Verify seeding
-            var verifyProducts = context.Products.OrderBy(p => p.ProductId).ToList();
-            Console.WriteLine($"Verified products count: {verifyProducts.Count}");
-            foreach (var product in verifyProducts)
-            {
-                Console.WriteLine($"Verified product: {JsonConvert.SerializeObject(product)}");
-            }
-
-            // Add test orders if they don't exist
-            if (!context.Orders.Any())
-            {
-                var orders = new List<SampleOrder>();
-                for (int i = 1; i <= 2; i++)
-                {
-                    var order = new SampleOrder
-                    {
-                        OrderId = i,
-                        CustomerName = $"Test Customer {i}",
-                        OrderDate = DateTime.UtcNow.AddDays(-i),
-                        TotalAmount = i * 50.99m
-                    };
-                    orders.Add(order);
-                }
-
-                Console.WriteLine($"Adding {orders.Count} orders...");
-                context.Orders.AddRange(orders);
-                context.SaveChanges();
-                Console.WriteLine($"Orders after seeding: {context.Orders.Count()}");
-
-                // Add order details
-                var orderDetails = new List<SampleOrderDetail>
-                {
-                    new SampleOrderDetail { OrderId = orders[0].OrderId, ProductId = seededProducts[0].ProductId, Quantity = 2, UnitPrice = 10.99m },
-                    new SampleOrderDetail { OrderId = orders[0].OrderId, ProductId = seededProducts[1].ProductId, Quantity = 1, UnitPrice = 30.99m },
-                    new SampleOrderDetail { OrderId = orders[1].OrderId, ProductId = seededProducts[1].ProductId, Quantity = 4, UnitPrice = 20.99m }
-                };
-
-                Console.WriteLine($"Adding {orderDetails.Count} order details...");
-                context.OrderDetails.AddRange(orderDetails);
-                context.SaveChanges();
-            }
-
-            var jsonSettings = new JsonSerializerSettings
-            {
-                ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
-                PreserveReferencesHandling = PreserveReferencesHandling.Objects,
-                NullValueHandling = NullValueHandling.Ignore,
-                ContractResolver = new CamelCasePropertyNamesContractResolver()
-            };
-
-            var finalProducts = context.Products.ToList();
-            Console.WriteLine($"Final products in database: {JsonConvert.SerializeObject(finalProducts, jsonSettings)}");
-            Console.WriteLine($"Database seeded with {context.Products.Count()} products, {context.Orders.Count()} orders, and {context.OrderDetails.Count()} order details.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error seeding database: {ex.Message}");
-            throw;
-        }
-    }
+    private string _odataPrefix = "/odata";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Testing");
+
         builder.ConfigureServices(services =>
         {
-            // Remove existing registrations
-            var dbContextDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<SampleDbContext>));
-            if (dbContextDescriptor != null)
-            {
-                services.Remove(dbContextDescriptor);
-            }
-
-            var authDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(Microsoft.AspNetCore.Authentication.IAuthenticationSchemeProvider));
-            if (authDescriptor != null)
-            {
-                services.Remove(authDescriptor);
-            }
-
-            var authServiceDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IAuthService));
-            if (authServiceDescriptor != null)
-            {
-                services.Remove(authServiceDescriptor);
-            }
-
-
-
             // Remove existing registrations
             var descriptorsToRemove = services.Where(d =>
                 d.ServiceType == typeof(DbContextOptions<SampleDbContext>) ||
                 d.ServiceType == typeof(SampleDbContext) ||
                 d.ServiceType == typeof(ISampleProductRepository) ||
                 d.ServiceType == typeof(ISampleOrderRepository) ||
-                d.ServiceType == typeof(ISampleOrderDetailRepository)).ToList();
+                d.ServiceType == typeof(ISampleCompoundKeyOrderDetailRepository) ||
+                d.ServiceType == typeof(Microsoft.AspNetCore.Authentication.IAuthenticationSchemeProvider) ||
+                d.ServiceType == typeof(IAuthService)).ToList();
 
             foreach (var descriptor in descriptorsToRemove)
-            {
-                services.Remove(descriptor);
-            }
-
-            // Remove OData registrations
-            var odataDescriptors = services.Where(d =>
-                d.ServiceType.Name.Contains("OData") ||
-                d.ServiceType.Name.Contains("Edm") ||
-                d.ImplementationType?.Name.Contains("OData") == true ||
-                d.ImplementationType?.Name.Contains("Edm") == true).ToList();
-
-            foreach (var descriptor in odataDescriptors)
             {
                 services.Remove(descriptor);
             }
@@ -190,14 +48,27 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
             services.AddDbContext<SampleDbContext>(options =>
             {
                 options.UseInMemoryDatabase(databaseName);
-                options.UseQueryTrackingBehavior(QueryTrackingBehavior.TrackAll);
+                options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
                 options.EnableSensitiveDataLogging();
             });
 
             // Add repositories
             services.AddScoped<ISampleProductRepository, SampleProductRepository>();
             services.AddScoped<ISampleOrderRepository, SampleOrderRepository>();
-            services.AddScoped<ISampleOrderDetailRepository, SampleOrderDetailRepository>();
+            services.AddScoped<ISampleCompoundKeyOrderDetailRepository, SampleCompoundKeyOrderDetailRepository>();
+
+            // Configure auth
+            var jwtKey = "your-test-secret-key-that-is-long-enough-for-hmacsha256";
+            var issuer = "test-issuer";
+            var audience = "test-audience";
+
+            services.Configure<AuthSettings>(options =>
+            {
+                options.Key = jwtKey;
+                options.Issuer = issuer;
+                options.Audience = audience;
+            });
+            services.AddScoped<IAuthService, AuthService>();
 
             // Configure MVC and OData
             var edmModel = Api.Infrastructure.Setup.EdmModelBuilder.GetEdmModel();
@@ -208,7 +79,7 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
                     options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
                     options.SerializerSettings.PreserveReferencesHandling = PreserveReferencesHandling.Objects;
                     options.SerializerSettings.NullValueHandling = NullValueHandling.Ignore;
-                    options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+                    options.SerializerSettings.ContractResolver = new CamelCasePropertyNamesContractResolver();
                 })
                 .AddOData(options =>
                 {
@@ -218,11 +89,7 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
                     options.EnableNoDollarQueryOptions = true;
                 });
 
-            // Configure API behavior
-            services.Configure<ApiBehaviorOptions>(options =>
-            {
-                options.SuppressModelStateInvalidFilter = true;
-            });
+
 
             // Add common services
             services.AddEndpointsApiExplorer();
@@ -258,34 +125,7 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
                 });
             });
 
-            // Add seed data
-            var sp = services.BuildServiceProvider();
-            try
-            {
-                using (var scope = sp.CreateScope())
-                {
-                    var context = scope.ServiceProvider.GetRequiredService<SampleDbContext>();
-                    SeedDatabase(context);
-                    Console.WriteLine($"Successfully seeded database {databaseName}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error seeding database {databaseName}: {ex}");
-                throw;
-            }
-
-            // Add required services
-            var jwtKey = "your-test-secret-key-that-is-long-enough-for-hmacsha256-with-extra-padding-123456789";
-            var issuer = "your-test-issuer";
-            var audience = "your-test-audience";
-
-            services.AddScoped<IAuthService>(sp => new AuthService(
-                jwtKey,
-                issuer,
-                audience
-            ));
-
+            // Add JWT authentication
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
@@ -301,15 +141,153 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
                             Encoding.UTF8.GetBytes(jwtKey))
                     };
                 });
-
-            services.AddControllers()
-                .AddNewtonsoftJson(options =>
-                {
-                    options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
-                    options.SerializerSettings.NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore;
-                });
-            services.AddEndpointsApiExplorer();
-            services.AddSwaggerGen();
         });
+    }
+
+    public string GetJwtToken()
+    {
+        using var scope = Services.CreateScope();
+        var authService = scope.ServiceProvider.GetRequiredService<IAuthService>();
+        return authService.GenerateToken("test-user");
+    }
+
+    public string GetODataPrefix()
+    {
+        return _odataPrefix;
+    }
+
+    public async Task SeedDatabase()
+    {
+        using var scope = Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<SampleDbContext>();
+
+        try
+        {
+            Console.WriteLine("Starting database seeding...");
+            context.Database.EnsureDeleted();
+            context.Database.EnsureCreated();
+            Console.WriteLine("Database recreated");
+
+            // Clear existing data
+            context.OrderDetails.RemoveRange(context.OrderDetails);
+            context.Orders.RemoveRange(context.Orders);
+            context.Products.RemoveRange(context.Products);
+            context.SaveChanges();
+
+            // Add test products with fixed IDs
+            var products = new List<SampleProduct>();
+            var product1 = new SampleProduct
+            {
+                ProductId = 1,
+                Name = "Test Product 1",
+                Price = 19.99m,
+                Description = "Test Description 1"
+            };
+            context.Products.Add(product1);
+            await context.SaveChangesAsync();
+            products.Add(product1);
+
+            var product2 = new SampleProduct
+            {
+                ProductId = 2,
+                Name = "Test Product 2",
+                Price = 29.99m,
+                Description = "Test Description 2"
+            };
+            context.Products.Add(product2);
+            await context.SaveChangesAsync();
+            products.Add(product2);
+
+            var product3 = new SampleProduct
+            {
+                ProductId = 3,
+                Name = "Test Product 3",
+                Price = 39.99m,
+                Description = "Test Description 3"
+            };
+            context.Products.Add(product3);
+            await context.SaveChangesAsync();
+            products.Add(product3);
+
+            Console.WriteLine($"Products created with IDs: {product1.ProductId}, {product2.ProductId}, {product3.ProductId}");
+
+            // Add test orders with correct IDs
+            var order1 = new SampleOrder
+            {
+                OrderId = 1,
+                CustomerId = 1,
+                OrderDate = DateTime.UtcNow.AddDays(-1),
+                CustomerName = "Test Customer",
+                TotalAmount = 39.98m
+            };
+            context.Orders.Add(order1);
+            await context.SaveChangesAsync();
+
+            var order2 = new SampleOrder
+            {
+                OrderId = 2,
+                CustomerId = 1,
+                OrderDate = DateTime.UtcNow,
+                CustomerName = "Test Customer",
+                TotalAmount = 59.98m
+            };
+            context.Orders.Add(order2);
+            await context.SaveChangesAsync();
+
+            var order3 = new SampleOrder
+            {
+                OrderId = 3,
+                CustomerId = 2,
+                OrderDate = DateTime.UtcNow,
+                CustomerName = "Test Customer 2",
+                TotalAmount = 79.98m
+            };
+            context.Orders.Add(order3);
+            await context.SaveChangesAsync();
+
+            // Add order details
+            var orderDetail1 = new SampleCompoundKeyOrderDetail
+            {
+                OrderId = order1.OrderId,
+                ProductId = products[0].ProductId,
+                Quantity = 2,
+                UnitPrice = 19.99m,
+                Order = order1,
+                Product = products[0]
+            };
+            context.OrderDetails.Add(orderDetail1);
+            await context.SaveChangesAsync();
+
+            var orderDetail2 = new SampleCompoundKeyOrderDetail
+            {
+                OrderId = order2.OrderId,
+                ProductId = products[1].ProductId,
+                Quantity = 2,
+                UnitPrice = 29.99m,
+                Order = order2,
+                Product = products[1]
+            };
+            context.OrderDetails.Add(orderDetail2);
+            await context.SaveChangesAsync();
+
+            var orderDetail3 = new SampleCompoundKeyOrderDetail
+            {
+                OrderId = order3.OrderId,
+                ProductId = products[2].ProductId,
+                Quantity = 2,
+                UnitPrice = 39.99m,
+                Order = order3,
+                Product = products[2]
+            };
+            context.OrderDetails.Add(orderDetail3);
+            await context.SaveChangesAsync();
+
+            Console.WriteLine("Database seeded successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error seeding database: {ex.Message}");
+            throw;
+        }
     }
 }

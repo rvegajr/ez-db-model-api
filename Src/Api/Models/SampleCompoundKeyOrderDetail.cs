@@ -21,8 +21,8 @@ public class SampleCompoundKeyOrderDetail
 
     // Navigation properties
     [ForeignKey("OrderId")]
-    public virtual SampleOrder Order { get; set; } = null!;
+    public virtual SampleOrder? Order { get; set; }
 
     [ForeignKey("ProductId")]
-    public virtual SampleProduct Product { get; set; } = null!;
+    public virtual SampleProduct? Product { get; set; }
 }

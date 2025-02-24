@@ -6,20 +6,20 @@ using Api.Repositories;
 
 namespace Api.Controllers.OData;
 
-public interface ISampleOrderDetailsController
+public interface ISampleCompoundKeyOrderDetailController
 {
     IActionResult Get();
-    Task<IActionResult> GetByKey(int key);
+    Task<IActionResult> GetByKey(int orderId, int productId);
     Task<IActionResult> Post([FromBody] SampleCompoundKeyOrderDetail orderDetail);
-    Task<IActionResult> Put(int key, [FromBody] SampleCompoundKeyOrderDetail orderDetail);
-    Task<IActionResult> Delete(int key);
+    Task<IActionResult> Put(int orderId, int productId, [FromBody] SampleCompoundKeyOrderDetail orderDetail);
+    Task<IActionResult> Delete(int orderId, int productId);
 }
 
-public class SampleOrderDetailsController : ODataController, ISampleOrderDetailsController
+public class SampleCompoundKeyOrderDetailController : ODataController, ISampleCompoundKeyOrderDetailController
 {
-    private readonly ISampleOrderDetailRepository _repository;
+    private readonly ISampleCompoundKeyOrderDetailRepository _repository;
 
-    public SampleOrderDetailsController(ISampleOrderDetailRepository repository)
+    public SampleCompoundKeyOrderDetailController(ISampleCompoundKeyOrderDetailRepository repository)
     {
         _repository = repository;
     }
@@ -31,9 +31,9 @@ public class SampleOrderDetailsController : ODataController, ISampleOrderDetails
     }
 
     [EnableQuery]
-    public async Task<IActionResult> GetByKey([FromRoute] int key)
+    public async Task<IActionResult> GetByKey([FromRoute] int orderId, [FromRoute] int productId)
     {
-        var orderDetail = await _repository.GetByIdAsync(key);
+        var orderDetail = await _repository.GetByCompoundKeyAsync(orderId, productId);
         if (orderDetail == null)
         {
             return NotFound();
@@ -52,14 +52,14 @@ public class SampleOrderDetailsController : ODataController, ISampleOrderDetails
         return Created(result);
     }
 
-    public async Task<IActionResult> Put([FromRoute] int key, [FromBody] SampleCompoundKeyOrderDetail orderDetail)
+    public async Task<IActionResult> Put([FromRoute] int orderId, [FromRoute] int productId, [FromBody] SampleCompoundKeyOrderDetail orderDetail)
     {
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
         }
 
-        if (key != orderDetail.OrderId)
+        if (orderId != orderDetail.OrderId || productId != orderDetail.ProductId)
         {
             return BadRequest();
         }
@@ -72,9 +72,9 @@ public class SampleOrderDetailsController : ODataController, ISampleOrderDetails
         return Updated(result);
     }
 
-    public async Task<IActionResult> Delete([FromRoute] int key)
+    public async Task<IActionResult> Delete([FromRoute] int orderId, [FromRoute] int productId)
     {
-        var orderDetail = await _repository.GetByIdAsync(key);
+        var orderDetail = await _repository.GetByCompoundKeyAsync(orderId, productId);
         if (orderDetail == null)
         {
             return NotFound();

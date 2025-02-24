@@ -1,108 +1,124 @@
-using Api.Controllers.Entity;
-using Api.Infrastructure.Base;
-using Api.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Test;
 
-public class SimpleSampleProductControllerTests : TestBase
+[Collection("TestCollection")]
+public class SimpleSampleProductControllerTests : TestBase, IAsyncLifetime
 {
-    private readonly SimpleSampleProductController _controller;
-    private readonly IGenericRepository<SampleProduct, int> _repository;
-
-    public SimpleSampleProductControllerTests()
+    public SimpleSampleProductControllerTests(
+        TestWebApplicationFactory<Program> factory) : base(factory)
     {
-        _repository = new GenericRepository<SampleProduct, int>(_context);
-        _controller = new SimpleSampleProductController(_repository);
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _factory.SeedDatabase();
+    }
+
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
     }
 
     [Fact]
-    public async Task GetAll_ReturnsAllProducts()
-    {
-        // Arrange
-        var products = new List<SampleProduct>
-        {
-            new() { ProductId = 1, Name = "Product 1", Price = 10.99m },
-            new() { ProductId = 2, Name = "Product 2", Price = 20.99m }
-        };
-        await _context.Products.AddRangeAsync(products);
-        await _context.SaveChangesAsync();
-
-        // Act
-        var result = await _controller.GetAll();
-
-        // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returnedProducts = Assert.IsAssignableFrom<IEnumerable<SampleProduct>>(okResult.Value);
-        Assert.Equal(2, returnedProducts.Count());
-    }
-
-    [Fact]
-    public async Task GetById_ReturnsProduct_WhenExists()
+    async Task GetAll_ReturnsAllProducts()
     {
         // Arrange
-        var product = new SampleProduct { ProductId = 1, Name = "Test Product", Price = 15.99m };
-        await _context.Products.AddAsync(product);
-        await _context.SaveChangesAsync();
+        // Database is seeded in InitializeAsync
 
         // Act
-        var result = await _controller.GetById(1);
+        var response = await _client.GetAsync("/SimpleSampleProduct");
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var returnedProducts = JsonConvert.DeserializeObject<List<SampleProduct>>(responseContent);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var returnedProduct = Assert.IsType<SampleProduct>(okResult.Value);
-        Assert.Equal("Test Product", returnedProduct.Name);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        returnedProducts.Should().NotBeNull();
+        returnedProducts.Should().HaveCount(3);
     }
 
     [Fact]
-    public async Task Create_ReturnsCreatedProduct()
+    async Task GetById_ReturnsProduct_WhenExists()
+    {
+        // Arrange
+        // Database is seeded in InitializeAsync
+
+        // Act
+        var firstProduct = GetContext().Products.First();
+        var response = await _client.GetAsync($"/SimpleSampleProduct/{firstProduct.ProductId}");
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var returnedProduct = JsonConvert.DeserializeObject<SampleProduct>(responseContent);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        returnedProduct.Should().NotBeNull();
+        returnedProduct!.Name.Should().Be(firstProduct.Name);
+        returnedProduct.Price.Should().Be(firstProduct.Price);
+        returnedProduct.Description.Should().Be(firstProduct.Description);
+    }
+
+    [Fact]
+    async Task Create_ReturnsCreatedProduct()
     {
         // Arrange
         var product = new SampleProduct { Name = "New Product", Price = 25.99m };
 
         // Act
-        var result = await _controller.Create(product);
+        var json = JsonConvert.SerializeObject(product);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/SimpleSampleProduct", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var returnedProduct = JsonConvert.DeserializeObject<SampleProduct>(responseContent);
 
         // Assert
-        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
-        var returnedProduct = Assert.IsType<SampleProduct>(createdResult.Value);
-        Assert.Equal("New Product", returnedProduct.Name);
-        Assert.NotEqual(0, returnedProduct.ProductId);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        returnedProduct.Should().NotBeNull();
+        returnedProduct!.Name.Should().Be("New Product");
+        returnedProduct.ProductId.Should().NotBe(0);
     }
 
     [Fact]
-    public async Task Update_ReturnsNoContent_WhenSuccessful()
+    async Task Update_ReturnsNoContent_WhenSuccessful()
     {
         // Arrange
-        var product = new SampleProduct { ProductId = 1, Name = "Original Name", Price = 10.99m };
-        await _context.Products.AddAsync(product);
-        await _context.SaveChangesAsync();
+        // Database is seeded in InitializeAsync
 
-        var updatedProduct = new SampleProduct { ProductId = 1, Name = "Updated Name", Price = 15.99m };
+        var firstProduct = GetContext().Products.First();
+        var updatedProduct = new SampleProduct 
+        { 
+            ProductId = firstProduct.ProductId, 
+            Name = "Updated Name", 
+            Price = 15.99m,
+            Description = "Updated Description"
+        };
 
         // Act
-        var result = await _controller.Update(1, updatedProduct);
+        var json = JsonConvert.SerializeObject(updatedProduct);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _client.PutAsync($"/SimpleSampleProduct/{firstProduct.ProductId}", content);
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
-        var dbProduct = await _context.Products.FindAsync(1);
-        Assert.Equal("Updated Name", dbProduct?.Name);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var dbProduct = await GetContext().Products.FindAsync(firstProduct.ProductId);
+        dbProduct.Should().NotBeNull();
+        dbProduct!.Name.Should().Be(updatedProduct.Name);
+        dbProduct.Price.Should().Be(updatedProduct.Price);
+        dbProduct.Description.Should().Be(updatedProduct.Description);
     }
 
     [Fact]
-    public async Task Delete_ReturnsNoContent_WhenSuccessful()
+    async Task Delete_ReturnsNoContent_WhenSuccessful()
     {
         // Arrange
-        var product = new SampleProduct { ProductId = 1, Name = "Test Product", Price = 10.99m };
-        await _context.Products.AddAsync(product);
-        await _context.SaveChangesAsync();
+        // Database is seeded in InitializeAsync
+        var firstProduct = GetContext().Products.First();
 
         // Act
-        var result = await _controller.Delete(1);
+        var response = await _client.DeleteAsync($"/SimpleSampleProduct/{firstProduct.ProductId}");
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
-        var dbProduct = await _context.Products.FindAsync(1);
-        Assert.Null(dbProduct);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var dbProduct = await GetContext().Products.FindAsync(firstProduct.ProductId);
+        dbProduct.Should().BeNull();
     }
 }

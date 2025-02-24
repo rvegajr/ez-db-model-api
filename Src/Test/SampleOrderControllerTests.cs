@@ -2,48 +2,27 @@ using Xunit.Abstractions;
 
 namespace Test;
 
-public class SampleOrderControllerTests : TestBase
+public class SampleOrderControllerTests : TestBase, IAsyncLifetime
 {
+    private SampleOrder firstOrder;
     private readonly ITestOutputHelper _output;
-    private readonly ISampleOrderRepository _repository;
-    private readonly SampleOrderController _controller;
-
-    public SampleOrderControllerTests(ITestOutputHelper output)
+    public SampleOrderControllerTests(
+        TestWebApplicationFactory<Program> factory,
+        ITestOutputHelper output) : base(factory)
     {
         _output = output;
         TestOutputHelper.Initialize(output);
-        _repository = new SampleOrderRepository(_context);
-        _controller = new SampleOrderController(_repository);
+    }
 
-        // Seed test data
-        var product = new SampleProduct
-        {
-            ProductId = 1,
-            Name = "Test Product",
-            Price = 19.99m,
-            Description = "Test Description"
-        };
-        _context.Products.Add(product);
+    public async Task InitializeAsync()
+    {
+        await _factory.SeedDatabase();
+        firstOrder = GetContext().Orders.First();
+    }
 
-        var order = new SampleOrder
-        {
-            OrderId = 1,
-            OrderDate = DateTime.UtcNow,
-            CustomerName = "Test Customer",
-            TotalAmount = 39.98m,
-            OrderDetails = new List<SampleOrderDetail>
-            {
-                new SampleOrderDetail
-                {
-                    OrderId = 1,
-                    ProductId = 1,
-                    Quantity = 2,
-                    UnitPrice = 19.99m
-                }
-            }
-        };
-        _context.Orders.Add(order);
-        _context.SaveChanges();
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
     }
 
     [Fact]
@@ -52,13 +31,14 @@ public class SampleOrderControllerTests : TestBase
         _output.WriteLine("\nTesting: Get All Orders");
         _output.WriteLine("Checking if we can retrieve all orders from the database");
         // Act
-        var result = await _controller.GetAll();
+        var response = await _client.GetAsync("/SampleOrder");
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var orders = JsonConvert.DeserializeObject<IEnumerable<SampleOrder>>(responseContent);
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<IEnumerable<SampleOrder>>>(result);
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        var orders = Assert.IsAssignableFrom<IEnumerable<SampleOrder>>(okResult.Value);
-        Assert.Single(orders);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        orders.Should().NotBeNull();
+        orders.Should().HaveCount(3);
     }
 
     [Fact]
@@ -67,14 +47,20 @@ public class SampleOrderControllerTests : TestBase
         _output.WriteLine("\nTesting: Get Order By ID");
         _output.WriteLine("Checking if we can retrieve a specific order using its ID");
         // Act
-        var result = await _controller.GetById(1);
+        // Get first order from the list
+        var allResponse = await _client.GetAsync("/SampleOrder");
+        var allOrders = await allResponse.Content.ReadFromJsonAsync<List<SampleOrder>>();
+        var firstOrder = allOrders.First();
+
+        var response = await _client.GetAsync($"/SampleOrder/{firstOrder.OrderId}");
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var order = JsonConvert.DeserializeObject<SampleOrder>(responseContent);
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleOrder>>(result);
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        var order = Assert.IsType<SampleOrder>(okResult.Value);
-        Assert.Equal(1, order.OrderId);
-        Assert.Equal("Test Customer", order.CustomerName);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        order.Should().NotBeNull();
+        order!.OrderId.Should().Be(firstOrder.OrderId);
+        order.CustomerName.Should().Be("Test Customer");
     }
 
     [Fact]
@@ -83,11 +69,10 @@ public class SampleOrderControllerTests : TestBase
         _output.WriteLine("\nTesting: Get Non-existent Order");
         _output.WriteLine("Checking if we get NotFound when requesting an order that doesn't exist");
         // Act
-        var result = await _controller.GetById(999);
+        var response = await _client.GetAsync("/SampleOrder/999");
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleOrder>>(result);
-        Assert.IsType<NotFoundResult>(actionResult.Result);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
@@ -100,9 +85,9 @@ public class SampleOrderControllerTests : TestBase
         {
             OrderDate = DateTime.UtcNow,
             CustomerName = "New Customer",
-            OrderDetails = new List<SampleOrderDetail>
+            OrderDetails = new List<SampleCompoundKeyOrderDetail>
             {
-                new SampleOrderDetail
+                new SampleCompoundKeyOrderDetail
                 {
                     ProductId = 1,
                     Quantity = 1,
@@ -112,13 +97,16 @@ public class SampleOrderControllerTests : TestBase
         };
 
         // Act
-        var result = await _controller.Create(newOrder);
+        var json = JsonConvert.SerializeObject(newOrder);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/SampleOrder", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var order = JsonConvert.DeserializeObject<SampleOrder>(responseContent);
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleOrder>>(result);
-        var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(actionResult.Result);
-        var order = Assert.IsType<SampleOrder>(createdAtActionResult.Value);
-        Assert.Equal("New Customer", order.CustomerName);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        order.Should().NotBeNull();
+        order!.CustomerName.Should().Be("New Customer");
     }
 
     [Fact]
@@ -131,9 +119,9 @@ public class SampleOrderControllerTests : TestBase
             OrderDate = DateTime.UtcNow,
             CustomerName = "Updated Customer",
             TotalAmount = 39.98m,
-            OrderDetails = new List<SampleOrderDetail>
+            OrderDetails = new List<SampleCompoundKeyOrderDetail>
             {
-                new SampleOrderDetail
+                new SampleCompoundKeyOrderDetail
                 {
                     OrderId = 1,
                     ProductId = 1,
@@ -144,24 +132,31 @@ public class SampleOrderControllerTests : TestBase
         };
 
         // Act
-        var result = await _controller.Update(1, order);
+        var json = JsonConvert.SerializeObject(order);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _client.PutAsync("/SampleOrder/1", content);
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
-        var updatedOrder = await _context.Orders.FindAsync(1);
-        Assert.NotNull(updatedOrder);
-        Assert.Equal("Updated Customer", updatedOrder.CustomerName);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var updatedOrder = await GetContext().Orders.FindAsync(1);
+        updatedOrder.Should().NotBeNull();
+        updatedOrder!.CustomerName.Should().Be("Updated Customer");
     }
 
     [Fact]
     public async Task Delete_DeletesOrder_WhenOrderExists()
     {
         // Act
-        var result = await _controller.Delete(1);
+        // Get first order from the list
+        var allResponse = await _client.GetAsync("/SampleOrder");
+        var allOrders = await allResponse.Content.ReadFromJsonAsync<List<SampleOrder>>();
+        var firstOrder = allOrders.First();
+
+        var response = await _client.DeleteAsync($"/SampleOrder/{firstOrder.OrderId}");
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
-        var deletedOrder = await _context.Orders.FindAsync(1);
-        Assert.Null(deletedOrder);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var deletedOrder = await GetContext().Orders.FindAsync(1);
+        deletedOrder.Should().BeNull();
     }
 }

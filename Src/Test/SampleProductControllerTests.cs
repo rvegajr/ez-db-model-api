@@ -2,77 +2,73 @@ using Xunit.Abstractions;
 
 namespace Test;
 
-public class SampleProductControllerTests : TestBase
+public class SampleProductControllerTests : TestBase, IAsyncLifetime, IClassFixture<TestWebApplicationFactory<TestStartup>>
 {
     private readonly ITestOutputHelper _output;
-    private readonly ISampleProductRepository _repository;
-    private readonly SampleProductController _controller;
 
-    public SampleProductControllerTests(ITestOutputHelper output)
+    public SampleProductControllerTests(
+        TestWebApplicationFactory<Program> factory,
+        ITestOutputHelper output) : base(factory)
     {
         _output = output;
         TestOutputHelper.Initialize(output);
-        _repository = new SampleProductRepository(_context);
-        _controller = new SampleProductController(_repository);
+    }
 
-        // Seed test data
-        var product = new SampleProduct
-        {
-            ProductId = 1,
-            Name = "Test Product",
-            Price = 19.99m,
-            Description = "Test Description"
-        };
-        _context.Products.Add(product);
-        _context.SaveChanges();
+    public async Task InitializeAsync()
+    {
+        await _factory.SeedDatabase();
+    }
+
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
     }
 
     [Fact]
-    public async Task GetProducts_ReturnsAllProducts()
+    async Task GetProducts_ReturnsAllProducts()
     {
         _output.WriteLine("\nTesting: Get All Products");
         _output.WriteLine("Checking if we can retrieve all products from the database");
         // Act
-        var result = await _controller.GetAll();
+        var response = await _client.GetAsync("/SampleProduct");
+        var products = await response.Content.ReadFromJsonAsync<List<SampleProduct>>();
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<IEnumerable<SampleProduct>>>(result);
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        var products = Assert.IsAssignableFrom<IEnumerable<SampleProduct>>(okResult.Value);
-        Assert.Single(products);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        products.Should().NotBeNull();
+        products.Should().HaveCount(3);
     }
 
     [Fact]
-    public async Task GetById_ReturnsProduct_WhenProductExists()
+    async Task GetById_ReturnsProduct_WhenProductExists()
     {
         _output.WriteLine("\nTesting: Get Product By ID");
         _output.WriteLine("Checking if we can retrieve a specific product using its ID");
         // Act
-        var result = await _controller.GetById(1);
+        var response = await _client.GetAsync("/SampleProduct/1");
+        var product = await response.Content.ReadFromJsonAsync<SampleProduct>();
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleProduct>>(result);
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        var product = Assert.IsType<SampleProduct>(okResult.Value);
-        Assert.Equal(1, product.ProductId);
-        Assert.Equal("Test Product", product.Name);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        product.Should().NotBeNull();
+        product!.ProductId.Should().Be(1);
+        product.Name.Should().Be("Test Product 1");
     }
 
     [Fact]
-    public async Task GetById_ReturnsNotFound_WhenProductDoesNotExist()
+    async Task GetById_ReturnsNotFound_WhenProductDoesNotExist()
     {
         _output.WriteLine("\nTesting: Get Non-existent Product");
         _output.WriteLine("Checking if we get NotFound when requesting a product that doesn't exist");
         // Act
-        var result = await _controller.GetById(999);
+        var response = await _client.GetAsync("/SampleProduct/999");
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleProduct>>(result);
-        Assert.IsType<NotFoundResult>(actionResult.Result);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task CreateProduct_CreatesProduct_WhenModelIsValid()
+    async Task CreateProduct_CreatesProduct_WhenModelIsValid()
     {
         _output.WriteLine("\nTesting: Create New Product");
         _output.WriteLine("Checking if we can create a new product with valid data");
@@ -85,17 +81,17 @@ public class SampleProductControllerTests : TestBase
         };
 
         // Act
-        var result = await _controller.Create(newProduct);
+        var response = await _client.PostAsJsonAsync("/SampleProduct", newProduct);
+        var product = await response.Content.ReadFromJsonAsync<SampleProduct>();
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleProduct>>(result);
-        var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(actionResult.Result);
-        var product = Assert.IsType<SampleProduct>(createdAtActionResult.Value);
-        Assert.Equal("New Product", product.Name);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        product.Should().NotBeNull();
+        product!.Name.Should().Be("New Product");
     }
 
     [Fact]
-    public async Task Update_UpdatesProduct_WhenProductExists()
+    async Task Update_UpdatesProduct_WhenProductExists()
     {
         _output.WriteLine("\nTesting: Update Existing Product");
         _output.WriteLine("Checking if we can update an existing product's details");
@@ -109,24 +105,24 @@ public class SampleProductControllerTests : TestBase
         };
 
         // Act
-        var result = await _controller.Update(1, product);
+        var response = await _client.PutAsJsonAsync("/SampleProduct/1", product);
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
-        var updatedProduct = await _context.Products.FindAsync(1);
-        Assert.NotNull(updatedProduct);
-        Assert.Equal("Updated Product", updatedProduct.Name);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var updatedProduct = await GetContext().Products.FindAsync(1);
+        updatedProduct.Should().NotBeNull();
+        updatedProduct!.Name.Should().Be("Updated Product");
     }
 
     [Fact]
-    public async Task Delete_DeletesProduct_WhenProductExists()
+    async Task Delete_DeletesProduct_WhenProductExists()
     {
         // Act
-        var result = await _controller.Delete(1);
+        var response = await _client.DeleteAsync("/SampleProduct/1");
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
-        var deletedProduct = await _context.Products.FindAsync(1);
-        Assert.Null(deletedProduct);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var deletedProduct = await GetContext().Products.FindAsync(1);
+        deletedProduct.Should().BeNull();
     }
 }

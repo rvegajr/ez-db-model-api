@@ -1,142 +1,112 @@
-using Api.Controllers.Entity;
-using Api.Infrastructure.Base;
-using Api.Models;
-using Api.Repositories;
-using Microsoft.AspNetCore.Mvc;
-
 namespace Test;
 
-public class AdvancedSampleOrderControllerTests : TestBase
+public class AdvancedSampleOrderControllerTests : TestBase, IClassFixture<TestWebApplicationFactory<Program>>, IAsyncLifetime
 {
-    private readonly AdvancedSampleOrderController _controller;
-    private readonly IAdvancedSampleOrderRepository _repository;
-
-    public AdvancedSampleOrderControllerTests()
+    private SampleProduct firstProduct;
+    public AdvancedSampleOrderControllerTests(
+        TestWebApplicationFactory<Program> factory) : base(factory)
     {
-        _repository = new AdvancedSampleOrderRepository(_context);
-        _controller = new AdvancedSampleOrderController(_repository);
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _factory.SeedDatabase();
+        firstProduct = GetContext().Products.First();
+    }
+
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
     }
 
     [Fact]
-    public async Task GetMonthlyStatistics_ReturnsCorrectStats()
+    async Task GetMonthlyStatistics_ReturnsCorrectStats()
     {
         // Arrange
-        var orders = new List<SampleOrder>
-        {
-            new()
-            {
-                OrderId = 1,
-                CustomerName = "Customer 1",
-                OrderDate = DateTime.UtcNow,
-                TotalAmount = 100.00m,
-                OrderDetails = new List<SampleOrderDetail>
-                {
-                    new() { OrderId = 1, ProductId = 1, Quantity = 2, UnitPrice = 50.00m }
-                }
-            },
-            new()
-            {
-                OrderId = 2,
-                CustomerName = "Customer 2",
-                OrderDate = DateTime.UtcNow,
-                TotalAmount = 150.00m,
-                OrderDetails = new List<SampleOrderDetail>
-                {
-                    new() { OrderId = 2, ProductId = 1, Quantity = 3, UnitPrice = 50.00m }
-                }
-            }
-        };
-        await _context.Orders.AddRangeAsync(orders);
-        await _context.SaveChangesAsync();
+        // Database is seeded in InitializeAsync
 
         // Act
-        var result = await _controller.GetMonthlyStatistics();
+        var response = await _client.GetAsync("/AdvancedSampleOrder/statistics/monthly");
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var stats = JsonConvert.DeserializeObject<OrderStatistics>(responseContent);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var stats = Assert.IsType<OrderStatistics>(okResult.Value);
-        Assert.Equal(2, stats.TotalOrders);
-        Assert.Equal(250.00m, stats.TotalRevenue);
-        Assert.Equal(125.00m, stats.AverageOrderValue);
-        Assert.Equal(2, stats.UniqueCustomers);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        stats.Should().NotBeNull();
+        stats!.TotalOrders.Should().Be(3);
+        stats.TotalRevenue.Should().Be(179.94m);
+        stats.AverageOrderValue.Should().Be(59.98m);
+        stats.UniqueCustomers.Should().Be(2);
     }
 
     [Fact]
-    public async Task GetCustomerSummary_ReturnsCorrectSummary()
+    async Task GetCustomerSummary_ReturnsCorrectSummary()
     {
         // Arrange
-        var products = new List<SampleProduct>
-        {
-            new() { ProductId = 1, Name = "Product 1", Price = 50.00m },
-            new() { ProductId = 2, Name = "Product 2", Price = 75.00m }
-        };
-        await _context.Products.AddRangeAsync(products);
-
-        var orders = new List<SampleOrder>
-        {
-            new()
-            {
-                OrderId = 1,
-                CustomerName = "1", // Using ID as name for test
-                OrderDate = DateTime.UtcNow.AddDays(-1),
-                TotalAmount = 100.00m,
-                OrderDetails = new List<SampleOrderDetail>
-                {
-                    new() { OrderId = 1, ProductId = 1, Quantity = 2, UnitPrice = 50.00m }
-                }
-            },
-            new()
-            {
-                OrderId = 2,
-                CustomerName = "1", // Same customer
-                OrderDate = DateTime.UtcNow,
-                TotalAmount = 150.00m,
-                OrderDetails = new List<SampleOrderDetail>
-                {
-                    new() { OrderId = 2, ProductId = 2, Quantity = 2, UnitPrice = 75.00m }
-                }
-            }
-        };
-        await _context.Orders.AddRangeAsync(orders);
-        await _context.SaveChangesAsync();
+        // Database is seeded in InitializeAsync
 
         // Act
-        var result = await _controller.GetCustomerSummary(1);
+        var response = await _client.GetAsync("/AdvancedSampleOrder/customer/1/summary");
+        var responseContent = await response.Content.ReadAsStringAsync();
+        var summary = JsonConvert.DeserializeObject<CustomerOrderSummary>(responseContent);
 
         // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        var summary = Assert.IsType<CustomerOrderSummary>(okResult.Value);
-        Assert.Equal(1, summary.CustomerId);
-        Assert.Equal(2, summary.TotalOrders);
-        Assert.Equal(250.00m, summary.TotalSpent);
-        Assert.Equal(2, summary.TopPurchasedProducts.Count);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        summary.Should().NotBeNull();
+        summary!.CustomerId.Should().Be(1);
+        summary.TotalOrders.Should().Be(2);
+        summary.TotalSpent.Should().Be(99.96m);
+        summary.TopPurchasedProducts.Should().HaveCount(2);
     }
 
     [Fact]
-    public async Task Create_ValidatesAndProcessesOrder()
+    async Task Create_ValidatesAndProcessesOrder()
     {
         // Arrange
-        var product = new SampleProduct { ProductId = 1, Name = "Test Product", Price = 50.00m };
-        await _context.Products.AddAsync(product);
-        await _context.SaveChangesAsync();
+        // Database is seeded in InitializeAsync
 
         var order = new SampleOrder
         {
-            CustomerName = "Test Customer",
-            OrderDetails = new List<SampleOrderDetail>
+            CustomerId = 3,
+            CustomerName = "Test Customer 3",
+            OrderDetails = new List<SampleCompoundKeyOrderDetail>
             {
-                new() { ProductId = 1, Quantity = 2, UnitPrice = 50.00m }
+                new() 
+                { 
+                    ProductId = firstProduct.ProductId, 
+                    Quantity = 2
+                }
             }
         };
 
+        Console.WriteLine($"Creating order with CustomerId: {order.CustomerId}, CustomerName: {order.CustomerName}");
+
         // Act
-        var result = await _controller.Create(order);
+        var settings = new JsonSerializerSettings
+        {
+            ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+            PreserveReferencesHandling = PreserveReferencesHandling.Objects,
+            NullValueHandling = NullValueHandling.Ignore
+        };
+        var json = JsonConvert.SerializeObject(order, settings);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/AdvancedSampleOrder", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"Request content: {json}");
+        Console.WriteLine($"Response status: {response.StatusCode}");
+        Console.WriteLine($"Response content: {responseContent}");
+        if (response.StatusCode == HttpStatusCode.BadRequest)
+        {
+            var error = JsonConvert.DeserializeObject<dynamic>(responseContent);
+            Console.WriteLine($"Validation errors: {error}");
+        }
+        var createdOrder = JsonConvert.DeserializeObject<SampleOrder>(responseContent);
 
         // Assert
-        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
-        var createdOrder = Assert.IsType<SampleOrder>(createdResult.Value);
-        Assert.NotEqual(0, createdOrder.OrderId);
-        Assert.Equal(100.00m, createdOrder.TotalAmount);
-        Assert.Equal(DateTime.UtcNow.Date, createdOrder.OrderDate.Date);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        createdOrder.Should().NotBeNull();
+        createdOrder!.OrderId.Should().NotBe(0);
+        createdOrder.TotalAmount.Should().Be(firstProduct.Price * 2);
+        createdOrder.OrderDate.Date.Should().Be(DateTime.UtcNow.Date);
     }
 }

@@ -2,148 +2,159 @@ using Xunit.Abstractions;
 
 namespace Test;
 
-public class SampleOrderDetailControllerTests : TestBase
+public class SampleOrderDetailControllerTests : TestBase, IAsyncLifetime
 {
+    private SampleOrder firstOrder;
+    private SampleCompoundKeyOrderDetail firstOrderDetail;
     private readonly ITestOutputHelper _output;
-    private readonly ISampleOrderDetailRepository _repository;
-    private readonly SampleOrderDetailController _controller;
 
-    public SampleOrderDetailControllerTests(ITestOutputHelper output)
+    public async Task InitializeAsync()
+    {
+        await _factory.SeedDatabase();
+        firstOrder = GetContext().Orders.First();
+        firstOrderDetail = GetContext().OrderDetails.First();
+    }
+
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+    public SampleOrderDetailControllerTests(
+        TestWebApplicationFactory<Program> factory,
+        ITestOutputHelper output) : base(factory)
     {
         _output = output;
         TestOutputHelper.Initialize(output);
-        _repository = new SampleOrderDetailRepository(_context);
-        _controller = new SampleOrderDetailController(_repository);
-
-        // Seed test data
-        var product = new SampleProduct
-        {
-            ProductId = 1,
-            Name = "Test Product",
-            Price = 19.99m,
-            Description = "Test Description"
-        };
-        _context.Products.Add(product);
-
-        var order = new SampleOrder
-        {
-            OrderId = 1,
-            OrderDate = DateTime.UtcNow,
-            CustomerName = "Test Customer",
-            TotalAmount = 39.98m
-        };
-        _context.Orders.Add(order);
-
-        var orderDetail = new SampleOrderDetail
-        {
-            OrderId = 1,
-            ProductId = 1,
-            Quantity = 2,
-            UnitPrice = 19.99m
-        };
-        _context.OrderDetails.Add(orderDetail);
-        _context.SaveChanges();
     }
 
     [Fact]
     public async Task GetAll_ReturnsOrderDetails_WhenOrderExists()
     {
+        // Arrange
         _output.WriteLine("\nTesting: Get All Order Details");
-        _output.WriteLine("Checking if we can retrieve all order details from the database");
+
         // Act
-        var result = await _controller.GetAll();
+        var response = await _client.GetAsync("/SampleCompoundKeyOrderDetail");
+        var orderDetails = await response.Content.ReadFromJsonAsync<List<SampleCompoundKeyOrderDetail>>();
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<IEnumerable<SampleOrderDetail>>>(result);
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        var orderDetails = Assert.IsAssignableFrom<IEnumerable<SampleOrderDetail>>(okResult.Value);
-        Assert.Single(orderDetails);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        orderDetails.Should().NotBeNull();
+        orderDetails.Should().HaveCount(3);
+        orderDetails.Should().Contain(od => od.ProductId == 2);
     }
 
     [Fact]
     public async Task GetById_ReturnsOrderDetail_WhenOrderDetailExists()
     {
-        _output.WriteLine("\nTesting: Get Order Detail By ID");
-        _output.WriteLine("Checking if we can retrieve a specific order detail using its ID");
+        // Arrange
+        _output.WriteLine("\nTesting: Get Order Detail By Compound Key");
+
         // Act
-        var result = await _controller.GetById(1);
+        // Get first order detail from the list
+        var allResponse = await _client.GetAsync("/SampleCompoundKeyOrderDetail");
+        var allOrderDetails = await allResponse.Content.ReadFromJsonAsync<List<SampleCompoundKeyOrderDetail>>();
+        var firstOrderDetail = allOrderDetails.First();
+
+        var response = await _client.GetAsync($"/SampleCompoundKeyOrderDetail/{firstOrderDetail.OrderId}/{firstOrderDetail.ProductId}");
+        var orderDetail = await response.Content.ReadFromJsonAsync<SampleCompoundKeyOrderDetail>();
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleOrderDetail>>(result);
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        var orderDetail = Assert.IsType<SampleOrderDetail>(okResult.Value);
-        Assert.Equal(1, orderDetail.OrderId);
-        Assert.Equal(1, orderDetail.ProductId);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        orderDetail.Should().NotBeNull();
+        orderDetail.OrderId.Should().Be(firstOrderDetail.OrderId);
+        orderDetail.ProductId.Should().Be(firstOrderDetail.ProductId);
+        orderDetail.Quantity.Should().Be(firstOrderDetail.Quantity);
+        orderDetail.UnitPrice.Should().Be(firstOrderDetail.UnitPrice);
     }
 
     [Fact]
     public async Task GetById_ReturnsNotFound_WhenOrderDetailDoesNotExist()
     {
+        // Arrange
         _output.WriteLine("\nTesting: Get Non-existent Order Detail");
-        _output.WriteLine("Checking if we get NotFound when requesting an order detail that doesn't exist");
+
         // Act
-        var result = await _controller.GetById(999);
+        var response = await _client.GetAsync("/SampleCompoundKeyOrderDetail/999/999");
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleOrderDetail>>(result);
-        Assert.IsType<NotFoundResult>(actionResult.Result);
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
     public async Task Create_CreatesOrderDetail_WhenModelIsValid()
     {
-        _output.WriteLine("\nTesting: Create New Order Detail");
-        _output.WriteLine("Checking if we can create a new order detail with valid data");
         // Arrange
-        var newOrderDetail = new SampleOrderDetail
+        _output.WriteLine("\nTesting: Create New Order Detail");
+        // Get first order from the list
+        var allResponse = await _client.GetAsync("/SampleOrder");
+        var allOrders = await allResponse.Content.ReadFromJsonAsync<List<SampleOrder>>();
+        var firstOrder = allOrders.First();
+
+        var newOrderDetail = new SampleCompoundKeyOrderDetail
         {
-            OrderId = 1,
-            ProductId = 2,  // Using a different ProductId
+            OrderId = firstOrder.OrderId,
+            ProductId = 3,
             Quantity = 3,
-            UnitPrice = 19.99m
+            UnitPrice = 39.99m
         };
 
         // Act
-        var result = await _controller.Create(newOrderDetail);
+        var json = JsonConvert.SerializeObject(newOrderDetail);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync("/SampleCompoundKeyOrderDetail", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+        _output.WriteLine($"Request content: {json}");
+        _output.WriteLine($"Response status: {response.StatusCode}");
+        _output.WriteLine($"Response content: {responseContent}");
+        var createdOrderDetail = JsonConvert.DeserializeObject<SampleCompoundKeyOrderDetail>(responseContent);
 
         // Assert
-        var actionResult = Assert.IsType<ActionResult<SampleOrderDetail>>(result);
-        var createdAtActionResult = Assert.IsType<CreatedAtActionResult>(actionResult.Result);
-        var orderDetail = Assert.IsType<SampleOrderDetail>(createdAtActionResult.Value);
-        Assert.Equal(3, orderDetail.Quantity);
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        createdOrderDetail.Should().NotBeNull();
+        createdOrderDetail.OrderId.Should().Be(firstOrder.OrderId);
+        createdOrderDetail.ProductId.Should().Be(3);
+        createdOrderDetail.Quantity.Should().Be(3);
     }
 
     [Fact]
     public async Task Update_UpdatesOrderDetail_WhenOrderDetailExists()
     {
         // Arrange
-        var orderDetail = new SampleOrderDetail
+        var orderDetail = new SampleCompoundKeyOrderDetail
         {
-            OrderId = 1,
-            ProductId = 1,
+            OrderId = firstOrderDetail.OrderId,
+            ProductId = firstOrderDetail.ProductId,
             Quantity = 4,
             UnitPrice = 19.99m
         };
 
         // Act
-        var result = await _controller.Update(1, orderDetail);
+        var json = JsonConvert.SerializeObject(orderDetail);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var response = await _client.PutAsync($"/SampleCompoundKeyOrderDetail/{firstOrderDetail.OrderId}/{firstOrderDetail.ProductId}", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+        _output.WriteLine($"Request content: {json}");
+        _output.WriteLine($"Response status: {response.StatusCode}");
+        _output.WriteLine($"Response content: {responseContent}");
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
-        var updatedOrderDetail = await _context.OrderDetails.FindAsync(1, 1);
-        Assert.NotNull(updatedOrderDetail);
-        Assert.Equal(4, updatedOrderDetail.Quantity);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var updatedOrderDetail = await GetContext().OrderDetails.FindAsync(firstOrderDetail.OrderId, firstOrderDetail.ProductId);
+        updatedOrderDetail.Should().NotBeNull();
+        updatedOrderDetail!.Quantity.Should().Be(4);
     }
 
     [Fact]
     public async Task Delete_DeletesOrderDetail_WhenOrderDetailExists()
     {
         // Act
-        var result = await _controller.Delete(1);
+        var response = await _client.DeleteAsync($"/SampleCompoundKeyOrderDetail/{firstOrderDetail.OrderId}/{firstOrderDetail.ProductId}");
 
         // Assert
-        Assert.IsType<NoContentResult>(result);
-        var deletedOrderDetail = await _context.OrderDetails.FindAsync(1, 1);
-        Assert.Null(deletedOrderDetail);
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var deletedOrderDetail = await GetContext().OrderDetails.FindAsync(firstOrderDetail.OrderId, firstOrderDetail.ProductId);
+        deletedOrderDetail.Should().BeNull();
     }
 }

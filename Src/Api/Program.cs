@@ -34,8 +34,6 @@ public class Program
             settings.Audience = audience;
         });
 
-        // Add auth service
-        builder.Services.AddScoped<IAuthService, AuthService>();
 
         var app = builder.Build();
 

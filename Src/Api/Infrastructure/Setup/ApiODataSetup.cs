@@ -37,17 +37,19 @@ public class ApiODataSetup
                 .SetMaxTop(100)
                 .Count()
                 .Expand()
+                .SkipToken()
                 .AddRouteComponents("odata", GetEdmModel()));
     }
 
-    protected virtual IEdmModel GetEdmModel()
+    public virtual IEdmModel GetEdmModel()
     {
         var builder = new ODataConventionModelBuilder();
 
         // Configure entity sets
         builder.EntitySet<SampleProduct>("SampleProducts");
         builder.EntitySet<SampleOrder>("SampleOrders");
-        builder.EntitySet<SampleCompoundKeyOrderDetail>("SampleOrderDetails");
+        var orderDetails = builder.EntitySet<SampleCompoundKeyOrderDetail>("SampleCompoundKeyOrderDetails");
+        orderDetails.EntityType.HasKey(od => new { od.OrderId, od.ProductId });
 
         // Configure relationships
         builder.EntityType<SampleOrder>()

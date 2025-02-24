@@ -1,20 +1,42 @@
+using Api.Infrastructure.Base;
+using Microsoft.Extensions.DependencyInjection;
+using System;
+using System.Net.Http;
+using Xunit;
+
 namespace Test;
 
+[Collection("TestCollection")]
 public abstract class TestBase : IDisposable
 {
-    protected readonly SampleDbContext _context;
+    protected readonly HttpClient _client;
+    protected readonly IServiceProvider _serviceProvider;
+    protected readonly TestWebApplicationFactory<Program> _factory;
 
-    protected TestBase()
+    protected TestBase(TestWebApplicationFactory<Program> factory)
     {
-        var options = new DbContextOptionsBuilder<SampleDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
+        _factory = factory;
+        _client = factory.CreateClient();
+        _serviceProvider = factory.Services;
+    }
 
-        _context = new SampleDbContext(options);
+    private IServiceScope? _scope;
+    private SampleDbContext? _context;
+
+    protected SampleDbContext GetContext()
+    {
+        if (_context == null)
+        {
+            _scope = _serviceProvider.CreateScope();
+            _context = _scope.ServiceProvider.GetRequiredService<SampleDbContext>();
+        }
+        return _context;
     }
 
     public void Dispose()
     {
-        _context.Dispose();
+        _context?.Dispose();
+        _scope?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

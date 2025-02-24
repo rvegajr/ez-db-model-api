@@ -29,7 +29,7 @@ public class ApiBuilder : ApiBuilderBase
         // Register repositories
         _services.AddScoped<ISampleProductRepository, SampleProductRepository>();
         _services.AddScoped<ISampleOrderRepository, SampleOrderRepository>();
-        _services.AddScoped<ISampleOrderDetailRepository, SampleOrderDetailRepository>();
+        _services.AddScoped<ISampleCompoundKeyOrderDetailRepository, SampleCompoundKeyOrderDetailRepository>();
 
         // Add health checks
         _services.AddHealthChecks();

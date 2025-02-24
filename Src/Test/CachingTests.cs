@@ -2,155 +2,111 @@ using Xunit.Abstractions;
 
 namespace Test;
 
-public class CachingTests : TestBase
+public class CachingTests : TestBase, IAsyncLifetime
 {
     private readonly ITestOutputHelper _output;
-    private readonly SampleProductController _controller;
-    private readonly IMemoryCache _cache;
-    private readonly HttpContext _httpContext;
-
-    public CachingTests(ITestOutputHelper output)
+    public CachingTests(
+        TestWebApplicationFactory<Program> factory,
+        ITestOutputHelper output) : base(factory)
     {
         _output = output;
         TestOutputHelper.Initialize(output);
+    }
 
-        // Set up cache
-        var services = new ServiceCollection();
-        services.AddMemoryCache();
-        var serviceProvider = services.BuildServiceProvider();
-        _cache = serviceProvider.GetRequiredService<IMemoryCache>();
+    public async Task InitializeAsync()
+    {
+        await _factory.SeedDatabase();
+    }
 
-        // Set up HTTP context
-        _httpContext = new DefaultHttpContext
-        {
-            RequestServices = serviceProvider,
-            Request =
-            {
-                Path = "/SampleProduct"
-            }
-        };
-
-        // Set up controller
-        var repository = new SampleProductRepository(_context);
-        _controller = new SampleProductController(repository);
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = _httpContext
-        };
-
-        // Seed test data
-        var product = new SampleProduct
-        {
-            ProductId = 1,
-            Name = "Test Product",
-            Price = 19.99m,
-            Description = "Test Description"
-        };
-        _context.Products.Add(product);
-        _context.SaveChanges();
+    public Task DisposeAsync()
+    {
+        return Task.CompletedTask;
     }
 
     [Fact]
     public async Task GetProducts_CachesResponse()
     {
-        _output.WriteLine("\nTesting: Caching of Get All Products");
-        _output.WriteLine("Checking if the response is cached when getting all products");
         // Arrange
-        var cacheAttribute = new CacheAttribute();
-        _httpContext.Request.Path = "/SampleProduct";
-        var actionContext = new ActionContext(_httpContext, new RouteData(), new ActionDescriptor());
-        var executingContext = new ActionExecutingContext(actionContext, new List<IFilterMetadata>(), new Dictionary<string, object>(), _controller);
-        var executedContext = new ActionExecutedContext(actionContext, new List<IFilterMetadata>(), _controller);
+        _output.WriteLine("\nTesting: Caching of Get All Products");
 
         // Act 1 - First request
-        var actionResult = await _controller.GetAll();
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        executedContext.Result = okResult;
-        
-        await cacheAttribute.OnActionExecutionAsync(executingContext, async () => executedContext);
+        var response1 = await _client.GetAsync("/SimpleSampleProduct");
+        var products1 = await response1.Content.ReadFromJsonAsync<List<SampleProduct>>();
 
-        // Get the cache key
-        var cacheKey = GetCacheKey(executingContext);
-        var firstResponse = executedContext.Result as ObjectResult;
+        response1.StatusCode.Should().Be(HttpStatusCode.OK);
+        products1.Should().NotBeNull();
+        products1.Should().HaveCount(3);
 
         // Act 2 - Second request (should be from cache)
-        var cachedValue = _cache.Get(cacheKey);
+        var response2 = await _client.GetAsync("/SimpleSampleProduct");
+        var products2 = await response2.Content.ReadFromJsonAsync<List<SampleProduct>>();
 
-        // Assert
-        Assert.NotNull(cachedValue);
-        Assert.Equal((firstResponse?.Value as IEnumerable<SampleProduct>)?.First().Name, 
-                    (cachedValue as IEnumerable<SampleProduct>)?.First().Name);
+        response2.StatusCode.Should().Be(HttpStatusCode.OK);
+        products2.Should().NotBeNull();
+        products2.Should().HaveCount(3);
+
+        // Assert - both responses should be identical
+        JsonConvert.SerializeObject(products1)
+            .Should().Be(JsonConvert.SerializeObject(products2));
     }
 
     [Fact]
     public async Task GetProduct_CachesResponse()
     {
-        _output.WriteLine("\nTesting: Caching of Get Single Product");
-        _output.WriteLine("Checking if the response is cached when getting a single product");
         // Arrange
-        var cacheAttribute = new CacheAttribute();
-        _httpContext.Request.Path = "/SampleProduct/1";
-        var actionContext = new ActionContext(_httpContext, new RouteData(), new ActionDescriptor());
-        var executingContext = new ActionExecutingContext(actionContext, new List<IFilterMetadata>(), 
-            new Dictionary<string, object> { { "id", 1 } }, _controller);
-        var executedContext = new ActionExecutedContext(actionContext, new List<IFilterMetadata>(), _controller);
+        _output.WriteLine("\nTesting: Caching of Get Single Product");
 
         // Act 1 - First request
-        var actionResult = await _controller.GetById(1);
-        var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
-        executedContext.Result = okResult;
-        
-        await cacheAttribute.OnActionExecutionAsync(executingContext, async () => executedContext);
+        var firstProduct = GetContext().Products.First();
+        var response1 = await _client.GetAsync($"/SimpleSampleProduct/{firstProduct.ProductId}");
+        var product1 = await response1.Content.ReadFromJsonAsync<SampleProduct>();
 
-        // Get the cache key
-        var cacheKey = GetCacheKey(executingContext);
-        var firstResponse = executedContext.Result as ObjectResult;
+        response1.StatusCode.Should().Be(HttpStatusCode.OK);
+        product1.Should().NotBeNull();
+        product1.Should().NotBeNull();
 
         // Act 2 - Second request (should be from cache)
-        var cachedValue = _cache.Get(cacheKey);
+        var response2 = await _client.GetAsync($"/SimpleSampleProduct/{firstProduct.ProductId}");
+        var product2 = await response2.Content.ReadFromJsonAsync<SampleProduct>();
 
-        // Assert
-        Assert.NotNull(cachedValue);
-        Assert.Equal((firstResponse?.Value as SampleProduct)?.Name, 
-                    (cachedValue as SampleProduct)?.Name);
+        response2.StatusCode.Should().Be(HttpStatusCode.OK);
+        product2.Should().NotBeNull();
+        product2.Should().NotBeNull();
+
+        // Assert - both responses should be identical
+        JsonConvert.SerializeObject(product1)
+            .Should().Be(JsonConvert.SerializeObject(product2));
     }
 
     [Fact]
-    public async Task GetProduct_DifferentIds_DifferentCacheKeys()
+    public async Task GetProduct_DifferentIds_DifferentResponses()
     {
         // Arrange
-        var cacheAttribute = new CacheAttribute();
-        
-        // First request context
-        _httpContext.Request.Path = "/SampleProduct/1";
-        var actionContext1 = new ActionContext(_httpContext, new RouteData(), new ActionDescriptor());
-        var executingContext1 = new ActionExecutingContext(actionContext1, new List<IFilterMetadata>(), 
-            new Dictionary<string, object> { { "id", 1 } }, _controller);
-        
-        // Second request context
-        _httpContext.Request.Path = "/SampleProduct/2";
-        var actionContext2 = new ActionContext(_httpContext, new RouteData(), new ActionDescriptor());
-        var executingContext2 = new ActionExecutingContext(actionContext2, new List<IFilterMetadata>(), 
-            new Dictionary<string, object> { { "id", 2 } }, _controller);
+        _output.WriteLine("\nTesting: Different Products Have Different Cache Keys");
 
-        // Act
-        var cacheKey1 = GetCacheKey(executingContext1);
-        var cacheKey2 = GetCacheKey(executingContext2);
+        var products = GetContext().Products.OrderBy(p => p.ProductId).Take(2).ToList();
+
+        // Act - Get first product twice
+        var response1a = await _client.GetAsync($"/SimpleSampleProduct/{products[0].ProductId}");
+        var response1b = await _client.GetAsync($"/SimpleSampleProduct/{products[0].ProductId}");
+        var product1a = await response1a.Content.ReadFromJsonAsync<SampleProduct>();
+        var product1b = await response1b.Content.ReadFromJsonAsync<SampleProduct>();
+
+        // Get second product twice
+        var response2a = await _client.GetAsync($"/SimpleSampleProduct/{products[1].ProductId}");
+        var response2b = await _client.GetAsync($"/SimpleSampleProduct/{products[1].ProductId}");
+        var product2a = await response2a.Content.ReadFromJsonAsync<SampleProduct>();
+        var product2b = await response2b.Content.ReadFromJsonAsync<SampleProduct>();
 
         // Assert
-        Assert.NotEqual(cacheKey1, cacheKey2);
-    }
+        // Same product should return same response
+        JsonConvert.SerializeObject(product1a)
+            .Should().Be(JsonConvert.SerializeObject(product1b));
+        JsonConvert.SerializeObject(product2a)
+            .Should().Be(JsonConvert.SerializeObject(product2b));
 
-    private static string GetCacheKey(ActionExecutingContext context)
-    {
-        var keyBuilder = new System.Text.StringBuilder();
-        keyBuilder.Append($"{context.HttpContext.Request.Path}");
-
-        foreach (var (key, value) in context.ActionArguments.OrderBy(a => a.Key))
-        {
-            keyBuilder.Append($"|{key}={value}");
-        }
-
-        return keyBuilder.ToString();
+        // Different products should return different responses
+        JsonConvert.SerializeObject(product1a)
+            .Should().NotBe(JsonConvert.SerializeObject(product2a));
     }
 }

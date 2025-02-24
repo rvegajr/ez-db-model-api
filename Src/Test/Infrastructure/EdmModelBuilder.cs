@@ -13,17 +13,21 @@ public static class EdmModelBuilder
         // Configure entity sets
         builder.EntitySet<SampleProduct>("SampleProducts");
         builder.EntitySet<SampleOrder>("SampleOrders");
-        builder.EntitySet<SampleOrderDetail>("SampleOrderDetails");
+        builder.EntitySet<SampleCompoundKeyOrderDetail>("SampleCompoundKeyOrderDetails");
 
         // Configure relationships
         builder.EntityType<SampleOrder>()
             .HasMany(o => o.OrderDetails);
 
-        builder.EntityType<SampleOrderDetail>()
+        builder.EntityType<SampleCompoundKeyOrderDetail>()
             .HasOptional(d => d.Order);
 
-        builder.EntityType<SampleOrderDetail>()
+        builder.EntityType<SampleCompoundKeyOrderDetail>()
             .HasOptional(d => d.Product);
+
+        // Configure compound key
+        builder.EntityType<SampleCompoundKeyOrderDetail>()
+            .HasKey(d => new { d.OrderId, d.ProductId });
 
         return builder.GetEdmModel();
     }

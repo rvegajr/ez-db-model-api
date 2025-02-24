@@ -46,21 +46,3 @@ public interface IAdvancedSampleOrderRepository : IGenericRepository<SampleOrder
     Task ProcessNewOrderAsync(SampleOrder order);
     #endregion
 }
-
-public class OrderStatistics
-{
-    public int TotalOrders { get; set; }
-    public decimal TotalRevenue { get; set; }
-    public decimal AverageOrderValue { get; set; }
-    public int UniqueCustomers { get; set; }
-}
-
-public class CustomerOrderSummary
-{
-    public int CustomerId { get; set; }
-    public string CustomerName { get; set; } = string.Empty;
-    public int TotalOrders { get; set; }
-    public decimal TotalSpent { get; set; }
-    public DateTime LastOrderDate { get; set; }
-    public List<string> TopPurchasedProducts { get; set; } = new();
-}

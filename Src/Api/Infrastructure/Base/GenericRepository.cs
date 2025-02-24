@@ -25,8 +25,9 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
             _ => "Id"
         };
 
-        var result = await _dbSet.FirstOrDefaultAsync(e => EF.Property<TKey>(e, propertyName).Equals(id));
-        return result;
+        return await _dbSet
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => EF.Property<TKey>(e, propertyName).Equals(id));
     }
 
     public virtual async Task<TEntity> AddAsync(TEntity entity)
@@ -44,18 +45,58 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
         var id = (TKey)idProperty.GetValue(entity)
             ?? throw new InvalidOperationException($"ID property of {typeof(TEntity).Name} is null.");
 
-        var existingEntity = await GetByIdAsync(id)
+        var propertyName = typeof(TEntity).Name switch
+        {
+            "SampleProduct" => "ProductId",
+            "SampleOrder" => "OrderId",
+            "SampleOrderDetail" => "OrderId",
+            _ => "Id"
+        };
+
+        var existingEntity = await _dbSet
+            .AsTracking()
+            .FirstOrDefaultAsync(e => EF.Property<TKey>(e, propertyName).Equals(id))
             ?? throw new InvalidOperationException($"Entity {typeof(TEntity).Name} with ID {id} not found.");
 
         _context.Entry(existingEntity).CurrentValues.SetValues(entity);
         await _context.SaveChangesAsync();
-        return existingEntity;
+
+        // Detach the entity to avoid tracking issues
+        _context.Entry(existingEntity).State = EntityState.Detached;
+
+        // Get a fresh copy from the database
+        var updatedEntity = await _dbSet
+            .FirstOrDefaultAsync(e => EF.Property<TKey>(e, propertyName).Equals(id));
+
+        return updatedEntity;
     }
 
     public virtual async Task DeleteAsync(TEntity entity)
     {
-        _dbSet.Remove(entity);
+        var idProperty = typeof(TEntity).GetProperty(typeof(TEntity).Name == "SampleProduct" ? "ProductId" : "OrderId")
+            ?? throw new InvalidOperationException($"Entity {typeof(TEntity).Name} does not have an ID property.");
+
+        var id = (TKey)idProperty.GetValue(entity)
+            ?? throw new InvalidOperationException($"ID property of {typeof(TEntity).Name} is null.");
+
+        var propertyName = typeof(TEntity).Name switch
+        {
+            "SampleProduct" => "ProductId",
+            "SampleOrder" => "OrderId",
+            "SampleOrderDetail" => "OrderId",
+            _ => "Id"
+        };
+
+        var existingEntity = await _dbSet
+            .AsTracking()
+            .FirstOrDefaultAsync(e => EF.Property<TKey>(e, propertyName).Equals(id))
+            ?? throw new InvalidOperationException($"Entity {typeof(TEntity).Name} with ID {id} not found.");
+
+        _dbSet.Remove(existingEntity);
         await _context.SaveChangesAsync();
+
+        // Clear the context to ensure the entity is truly removed
+        _context.ChangeTracker.Clear();
     }
 
     public virtual async Task<bool> ExistsAsync(TKey id)
@@ -65,7 +106,7 @@ public class GenericRepository<TEntity, TKey> : IGenericRepository<TEntity, TKey
 
     public virtual async Task<IEnumerable<TEntity>> GetAllAsync()
     {
-        var entities = await _dbSet.ToListAsync();
+        var entities = await _dbSet.AsNoTracking().ToListAsync();
         return entities ?? Enumerable.Empty<TEntity>();
     }
 
